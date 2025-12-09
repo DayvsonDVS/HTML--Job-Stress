@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Importar Excel → Gerar Gráficos → Exportar PDF</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        padding: 20px;
+        background: #f6f6f9;
+        color: #333;
+      }
+      h1 {
+        text-align: center;
+        color: #2563eb;
+      }
+
+      .card {
+        background: white;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Estilo da área de exibição na tela */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+        gap: 25px;
+      }
+      .chart-wrapper {
+        position: relative;
+        /* AJUSTE PARA 550PX: Aumentado de 400px para 550px (para gráficos individuais) */
+        height: 550px;
+        width: 100%;
+      }
+      .grid h4 {
+        text-align: center;
+        margin-bottom: 10px;
+        color: #333;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+      }
+
+      button {
+        padding: 12px 20px;
+        border: none;
+        background: #2563eb;
+        color: white;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.3s;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+      button.secondary {
+        background: #64748b;
+        color: white;
+      }
+      button.secondary:hover {
+        background: #475569;
+      }
+
+      input[type='file'] {
+        padding: 10px;
+        border: 1px dashed #ccc;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .hidden {
+        display: none;
+      }
+
+      /* Estilos GERAIS para Comentários e Pontos de Atenção (na tela) */
+      .commentary {
+        white-space: pre-wrap;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-left: 5px solid #2563eb;
+        background-color: #f9f9ff;
+        border-radius: 4px;
+        margin-top: 20px;
+        font-size: 13px;
+      }
+      .attention-point {
+        padding: 15px;
+        border: 1px solid #f97316;
+        border-left: 5px solid #f97316;
+        background-color: #fff7ed;
+        border-radius: 4px;
+        margin-top: 15px;
+        font-weight: bold;
+        font-size: 13px;
+      }
+
+      /* Estilos GERAIS da Tabela de Dados (na tela) */
+      .chart-data-table {
+        width: 100%;
+        margin-top: 15px;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .chart-data-table th,
+      .chart-data-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+      }
+      .chart-data-table th {
+        background-color: #f2f2f2;
+      }
+
+      /* === Destaque para Textos em Negrito (b) === */
+      .commentary b,
+      .attention-point b {
+        font-weight: 900;
+        color: #1a1a1a;
+      }
+
+      /* === Estilo para o Título da Dimensão (Tela) === */
+      .dimension-header {
+        background: #eef2ff;
+        color: #1e40af;
+        padding: 20px;
+        margin: 30px 0 10px 0;
+        border-radius: 8px;
+        border: 1px solid #c7d2fe;
+        font-size: 16px;
+        font-weight: bold;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+      .dimension-header span {
+        display: block;
+        font-weight: normal;
+        color: #4b5563;
+        font-size: 13px;
+        margin-top: 5px;
+      }
+
+      /* === ESTILOS ESPECÍFICOS PARA O PDF (REDUÇÃO DE FONTE) === */
+      #pdfReportContainer {
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+        /* Largura ajustada para o formato Paisagem (250mm, aprox. 880px) */
+        width: 880px;
+        padding: 0;
+        background: white;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        box-sizing: border-box;
+        /* Fonte Globalmente aumentada */
+        font-size: 12px;
+      }
+      .pdf-report-item {
+        padding: 10px;
+        margin-bottom: 0;
+      }
+      .pdf-report-item h2 {
+        /* Aumento: 13px -> 14px */
+        font-size: 14px;
+        margin-bottom: 15px;
+        text-align: center;
+        color: #2563eb;
+      }
+
+      /* Redução de Fonte para Comentário/Atenção (PDF) */
+      #pdfReportContainer .commentary,
+      #pdfReportContainer .attention-point {
+        padding: 10px;
+        /* Aumento: 10px -> 11px */
+        font-size: 11px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+      }
+
+      /* Redução de Fonte para Tabela de Dados (PDF) */
+      #pdfReportContainer .chart-data-table {
+        /* Aumento: 10px -> 11px */
+        font-size: 11px;
+      }
+      #pdfReportContainer .chart-data-table th,
+      #pdfReportContainer .chart-data-table td {
+        padding: 5px; /* Redução do padding da tabela */
+      }
+
+      /* Estilo para o Título da Dimensão (PDF) */
+      #pdfReportContainer .dimension-header {
+        padding: 15px;
+        margin: 15px 0 10px 0;
+        /* Aumento: 13px -> 14px */
+        font-size: 14px;
+      }
+      #pdfReportContainer .dimension-header span {
+        /* Aumento: 10px -> 11px */
+        font-size: 11px;
+      }
+      /* =========================================
+         ESTILOS ESPECÍFICOS PARA O DASHBOARD FINAL (PDF/SCREEN CAPTURE)
+         ========================================= */
+      #dashboard-final-container {
+        /* Garante que o container ocupe a largura da card na tela */
+        width: 100%;
+        padding: 10px;
+        background: #fff;
+        box-sizing: border-box;
+        font-family: Arial, sans-serif;
+        font-size: 11px; /* Fonte reduzida para caber na tela */
+      }
+      .dash-header {
+        text-align: center;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 5px;
+      }
+      .dash-header h2 {
+        margin: 0;
+        color: #333;
+        font-size: 22px; /* NOVO AJUSTE: Aumentado de 20px para 22px */
+        text-transform: uppercase;
+      }
+      .dash-sub {
+        font-size: 16px; /* NOVO AJUSTE: Aumentado de 14px para 16px */
+        color: #666;
+        margin-top: 5px;
+      }
+
+      /* Layout da Linha (Row) */
+      .dash-row {
+        display: flex;
+        border: 1px solid #999;
+        margin-bottom: 10px;
+        /* AJUSTE CHAVE: MANTIDO em 550px para dar altura */
+        height: 550px;
+      }
+
+      /* Coluna 1: Quantidade */
+      .dash-col-qty {
+        width: 15%;
+        border-right: 1px solid #999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background-color: #f4f4f4;
+        padding: 5px;
+      }
+      .dash-qty-label {
+        font-size: 14px; /* NOVO AJUSTE: Aumentado de 12px para 14px */
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 5px;
+        color: #333;
+        line-height: 1.2;
+      }
+      .dash-qty-val {
+        font-size: 50px; /* NOVO AJUSTE: Aumentado de 40px para 50px */
+        font-weight: bold;
+        color: #000;
+      }
+
+      /* Coluna 2: Pizza - MANTIDO */
+      .dash-col-pie {
+        width: 32%;
+        border-right: 1px solid #999;
+        padding: 5px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+      }
+      .dash-chart-title {
+        font-size: 15px; /* NOVO AJUSTE: Aumentado de 13px para 15px */
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #444;
+        text-align: center;
+        width: 100%;
+      }
+      /* ATENÇÃO: ALTERAÇÃO AQUI para ajustar o tamanho do gráfico de pizza */
+      .dash-col-pie > div {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        /* MANTIDO em 98% */
+        height: 98%;
+        width: 100%;
+        position: relative;
+      }
+
+      /* Coluna 3: Barras - MANTIDO */
+      .dash-col-bar {
+        width: 53%;
+        padding: 5px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Relatório Automático: Job Stress Scale</h1>
+
+    <div class="card">
+      <label style="font-weight: bold; display: block; margin-bottom: 10px"
+        >1. Selecione o arquivo Excel:</label
+      >
+      <input id="fileInput" type="file" accept=".xlsx,.xls" />
+    </div>
+
+    <div class="card hidden" id="controls">
+      <label style="font-weight: bold; display: block; margin-bottom: 10px"
+        >2. Ações:</label
+      >
+      <div style="display: flex; gap: 10px">
+        <button id="btnGerar">Gerar Gráficos na Tela</button>
+        <button id="btnPDF" class="secondary">Exportar Relatório PDF</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="graficosCard">
+      <h3>Pré-visualização dos Gráficos Individuais</h3>
+      <div id="commentaryDiv" class="commentary hidden"></div>
+      <div id="charts" class="grid"></div>
+    </div>
+
+    <div class="card hidden" id="dashboard-final-card">
+      <h3>Dashboard de Resumo Final</h3>
+      <div id="dashboard-final-container">
+        <div class="dash-header">
+          <p class="dash-sub">
+            DASHBOARD RESUMO: DIMENSÕES DEMANDA, CONTROLE E APOIO SOCIAL
+          </p>
+          <h2>DISTRIBUIÇÃO RESPOSTAS QUESTIONÁRIO KARASEK</h2>
+        </div>
+        <div class="dash-row">
+          <div class="dash-col-qty">
+            <span class="dash-qty-label">TOTAL RESPOSTAS DEMANDA</span>
+            <span class="dash-qty-val" id="final-qty-demanda">0</span>
+          </div>
+          <div class="dash-col-pie">
+            <span class="dash-chart-title">% Total Demanda</span>
+            <div><canvas id="final-pie-demanda"></canvas></div>
+          </div>
+          <div class="dash-col-bar">
+            <div style="flex: 1; width: 100%; position: relative">
+              <canvas id="final-bar-demanda"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="dash-row">
+          <div class="dash-col-qty">
+            <span class="dash-qty-label">TOTAL RESPOSTAS CONTROLE</span>
+            <span class="dash-qty-val" id="final-qty-controle">0</span>
+          </div>
+          <div class="dash-col-pie">
+            <span class="dash-chart-title">% Total Controle</span>
+            <div><canvas id="final-pie-controle"></canvas></div>
+          </div>
+          <div class="dash-col-bar">
+            <div style="flex: 1; width: 100%; position: relative">
+              <canvas id="final-bar-controle"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="dash-row">
+          <div class="dash-col-qty">
+            <span class="dash-qty-label">TOTAL RESPOSTAS APOIO SOCIAL</span>
+            <span class="dash-qty-val" id="final-qty-apoio">0</span>
+          </div>
+          <div class="dash-col-pie">
+            <span class="dash-chart-title">% Total Apoio Social</span>
+            <div><canvas id="final-pie-apoio"></canvas></div>
+          </div>
+          <div class="dash-col-bar">
+            <div style="flex: 1; width: 100%; position: relative">
+              <canvas id="final-bar-apoio"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="pdfReportContainer"></div>
+
+    <script>
+      // Desestruturações Globais
+      const { ChartDataLabels } = window
+      // Se Chart.js não carregar, esta linha falha.
+      if (ChartDataLabels) Chart.register(ChartDataLabels)
+
+      const { jsPDF } = window.jspdf
+
+      // ======================================================================
+      // === CONSTANTES GLOBAIS ===
+      // ======================================================================
+
+      const NEW_COMMENTARY_TITLE =
+        'Comentários Gerais - Análise do Ergonomista Pesquisador sobre os dados coletados:'
+
+      // CORES PARA O DASHBOARD KARASEK (Atualizadas para profissional)
+      // Ordem: 1. Azul Escuro, 2. Azul Médio, 3. Cinza Neutro, 4. Cinza Claro
+      const COLORS_DASHBOARD = ['#1e40af', '#3b82f6', '#9ca3af', '#d1d5db'] // [Mais Favorável -> Menos Favorável/Risco]
+
+      // Valores numéricos para cálculo do ponto de corte (Karasek) - MANTIDOS, mas não usados no dashboard
+      const SCORE_MAP = {
+        // Demanda e Controle
+        'Nunca ou quase nunca': 1,
+        Raramente: 2,
+        'Às vezes': 3,
+        Frequentemente: 4,
+        // Apoio Social (Inverso para Apoio)
+        'Discordo totalmente': 1,
+        'Discordo mais que concordo': 2,
+        'Concordo mais que discordo': 3,
+        'Concordo totalmente': 4
+      }
+
+      // Mapeamento de Colunas (usaremos a ID para obter o score)
+      const JSS_COLUMNS_RAW = [
+        // --- DEMANDA (D1-D5) ---
+        {
+          id: 'Com que frequência você tem que fazer suas tarefas de trabalho com muita rapidez?',
+          category: 'Demanda',
+          reverse: false,
+          header:
+            'D1: Com que frequência você tem que fazer suas tarefas de trabalho com muita rapidez?'
+        },
+        {
+          id: 'Com que frequência você tem que trabalhar intensamente (isto é, produzir muito em pouco tempo)?',
+          category: 'Demanda',
+          reverse: false,
+          header:
+            'D2: Com que frequência você tem que trabalhar intensamente (isto é, produzir muito em pouco tempo)?'
+        },
+        {
+          id: 'Seu trabalho exige demais de você?',
+          category: 'Demanda',
+          reverse: false,
+          header: 'D3: Seu trabalho exige demais de você?'
+        },
+        {
+          id: 'Você tem tempo suficiente para cumprir todas as tarefas de seu trabalho?',
+          category: 'Demanda',
+          reverse: true,
+          header:
+            'D4: Você tem tempo suficiente para cumprir todas as tarefas de seu trabalho?'
+        },
+        {
+          id: 'O seu trabalho costuma apresentar exigências contraditórias ou discordantes?',
+          category: 'Demanda',
+          reverse: false,
+          header:
+            'D5: O seu trabalho costuma apresentar exigências contraditórias ou discordantes?'
+        },
+
+        // --- CONTROLE (C1-C6) ---
+        {
+          id: 'Você tem possibilidade de aprender coisas novas em seu trabalho?',
+          category: 'Controle',
+          reverse: false,
+          header:
+            'C1: Você tem possibilidade de aprender coisas novas em seu trabalho?'
+        },
+        {
+          id: 'Seu trabalho exige muita habilidade ou conhecimentos especializados?',
+          category: 'Controle',
+          reverse: false,
+          header:
+            'C2: Seu trabalho exige muita habilidade ou conhecimentos especializados?'
+        },
+        {
+          id: 'Seu trabalho exige que você tome iniciativas?',
+          category: 'Controle',
+          reverse: false,
+          header: 'C3: Seu trabalho exige que você tome iniciativas?'
+        },
+        {
+          id: 'No seu trabalho, você tem que repetir muitas vezes as mesmas tarefas?',
+          category: 'Controle',
+          reverse: true,
+          header:
+            'C4: No seu trabalho, você tem que repetir muitas vezes as mesmas tarefas?'
+        },
+        {
+          id: 'Você pode escolher "Como" fazer o seu trabalho?',
+          category: 'Controle',
+          reverse: false,
+          header: 'C5: Você pode escolher "Como" fazer o seu trabalho?'
+        },
+        {
+          id: 'Você pode escolher "O QUE" fazer no seu trabalho?',
+          category: 'Controle',
+          reverse: false,
+          header: 'C6: Você pode escolher "O QUE" fazer no seu trabalho?'
+        },
+
+        // --- APOIO SOCIAL (A1-A6) ---
+        {
+          id: 'Existe um ambiente calmo e agradável onde trabalho.',
+          category: 'Apoio Social',
+          reverse: false,
+          header: 'A1: Existe um ambiente calmo e agradável onde trabalho.'
+        },
+        {
+          id: 'No trabalho, nos relacionamos bem uns com os outros.',
+          category: 'Apoio Social',
+          reverse: false,
+          header: 'A2: No trabalho, nos relacionamos bem uns com os outros.'
+        },
+        {
+          id: 'Eu posso contar com o apoio dos meus colegas de trabalho.',
+          category: 'Apoio Social',
+          reverse: false,
+          header:
+            'A3: Eu posso contar com o apoio dos meus colegas de trabalho.'
+        },
+        {
+          id: 'Se eu não estiver num bom dia, meus colegas compreendem.',
+          category: 'Apoio Social',
+          reverse: false,
+          header: 'A4: Se eu não estiver num bom dia, meus colegas compreendem.'
+        },
+        {
+          id: 'No trabalho, eu me relaciono bem com meus chefes.',
+          category: 'Apoio Social',
+          reverse: false,
+          header: 'A5: No trabalho, eu me relaciono bem com meus chefes.'
+        },
+        {
+          id: 'Eu gosto de trabalhar com meus colegas.',
+          category: 'Apoio Social',
+          reverse: false,
+          header: 'A6: Eu gosto de trabalhar com meus colegas.'
+        }
+      ]
+
+      const DIMENSION_TITLES = {
+        Demanda: `DIMENSÃO DEMANDA - D1 a D5.`,
+        Controle: `DIMENSÃO CONTROLE - C1 a C6`,
+        'Apoio Social': `DIMENSÃO APOIO SOCIAL - A1 a A6`
+      }
+
+      const DIMENSION_DESCRIPTIONS = {
+        Demanda: `(demanda quantitativa - Tempo e velocidade na realização do trabalho, demanda qualitativa - conflito entre demandas contraditórias).`,
+        Controle: `(possibilidade de utilizar habilidades intelectuais para a realização do trabalho, com autoridade para tomar decisões sobre a forma de realizá-lo).`,
+        'Apoio Social': `(níveis de interação social existentes no trabalho, tanto com os colegas quanto com as chefias).`
+      }
+
+      let excelData = []
+      let fullHeaders = []
+      let chartObjects = []
+      let detailedCommentaries = {}
+      let companyName = 'Nome da Empresa Não Identificado'
+      let finalCharts = [] // Gráficos do Dashboard Final
+
+      // 📌 RÓTULOS PADRONIZADOS (Manutenção da ordem)
+      const LABELS_DEMANDA_CONTROLE = [
+        'Nunca ou quase nunca',
+        'Raramente',
+        'Às vezes',
+        'Frequentemente'
+      ]
+
+      const LABELS_APOIO_SOCIAL = [
+        'Discordo totalmente',
+        'Discordo mais que concordo',
+        'Concordo mais que discordo',
+        'Concordo totalmente'
+      ]
+
+      // 📌 Mapeamento de Colunas JSS (detalhado para gráficos)
+      const JSS_COLUMNS = JSS_COLUMNS_RAW.map((col) => {
+        let riskLabels, favorable, unfavorable, labels
+        if (
+          col.category === 'Demanda' ||
+          col.id.includes('repetir muitas vezes')
+        ) {
+          labels = LABELS_DEMANDA_CONTROLE
+          riskLabels = ['Frequentemente', 'Às vezes']
+          favorable = ['Nunca ou quase nunca', 'Raramente']
+          unfavorable = col.reverse ? favorable : riskLabels
+          favorable = col.reverse ? riskLabels : favorable
+        } else if (col.category === 'Controle') {
+          labels = LABELS_DEMANDA_CONTROLE
+          riskLabels = ['Raramente', 'Nunca ou quase nunca']
+          favorable = ['Frequentemente', 'Às vezes']
+          unfavorable = col.reverse ? favorable : riskLabels
+          favorable = col.reverse ? riskLabels : favorable
+        } else if (col.category === 'Apoio Social') {
+          labels = LABELS_APOIO_SOCIAL
+          riskLabels = ['Discordo mais que concordo', 'Discordo totalmente']
+          favorable = ['Concordo totalmente', 'Concordo mais que discordo']
+          unfavorable = col.reverse ? favorable : riskLabels
+          favorable = col.reverse ? riskLabels : favorable
+        }
+        return {
+          ...col,
+          labels,
+          riskLabels,
+          favorable,
+          unfavorable
+        }
+      })
+
+      // ======================================================================
+      // === FUNÇÕES UTILITÁRIAS ===
+      // ======================================================================
+
+      document
+        .getElementById('fileInput')
+        .addEventListener('change', async (e) => {
+          const file = e.target.files[0]
+          if (!file) return
+
+          const ext = file.name.split('.').pop().toLowerCase()
+          if (!['xls', 'xlsx'].includes(ext)) {
+            alert('Formato inválido. Selecione um arquivo .xls ou .xlsx.')
+            return
+          }
+
+          try {
+            const data = await file.arrayBuffer()
+            const workbook = XLSX.read(data, { type: 'array' })
+            const firstSheetName = workbook.SheetNames[0]
+            const sheet = workbook.Sheets[firstSheetName]
+
+            let rawData = XLSX.utils.sheet_to_json(sheet, {
+              header: 1,
+              defval: ''
+            })
+
+            if (rawData.length < 5) {
+              alert(
+                'A planilha não possui dados suficientes (esperado iniciar na linha 5).'
+              )
+              return
+            }
+
+            // Captura do Nome da Empresa na linha 6 (índice 5), coluna B (índice 1)
+            const companyNameRow = rawData[5]
+            companyName =
+              String(companyNameRow[1]).trim() ||
+              'Nome da Empresa Não Identificado'
+
+            const headers = rawData[4]
+
+            const headersMap = {}
+            for (let i = 11; i <= 27; i++) {
+              const headerName = String(headers[i]).trim()
+              if (headerName) {
+                let mappedColumn = JSS_COLUMNS.find(
+                  (col) => col.id.trim() === headerName.trim()
+                )
+
+                if (mappedColumn) {
+                  headersMap[mappedColumn.id] = i
+                } else {
+                  console.warn(
+                    `Cabeçalho não mapeado (verifique a grafia): ${headerName}`
+                  )
+                }
+              }
+            }
+
+            excelData = rawData
+              .slice(5)
+              .map((row) => {
+                const obj = {}
+                JSS_COLUMNS.forEach((col) => {
+                  const colIndex = headersMap[col.id]
+                  if (colIndex !== undefined) {
+                    obj[col.id] =
+                      row[colIndex] !== undefined ? row[colIndex] : ''
+                  }
+                })
+                return obj
+              })
+              .filter((obj) => Object.keys(obj).length > 0)
+
+            fullHeaders = JSS_COLUMNS.map((col) => col.id)
+
+            document.getElementById('controls').classList.remove('hidden')
+            document.getElementById('graficosCard').classList.add('hidden')
+          } catch (err) {
+            console.error(err)
+            alert('Erro ao ler o arquivo Excel.')
+          }
+        })
+
+      function contar(coluna) {
+        const freq = {}
+        coluna.forEach((v) => {
+          const t = String(v).trim()
+          if (!t) return
+          if (!freq[t]) freq[t] = 0
+          freq[t]++
+        })
+        return freq
+      }
+
+      function calcularPorcentagem(numerador, denominador, casasDecimais = 0) {
+        if (denominador === 0 || Number(numerador) === 0) return '0.0'
+
+        const resultado = (Number(numerador) / Number(denominador)) * 100
+        return resultado.toFixed(casasDecimais)
+      }
+
+      function gerarComentarioGeralDetalhado(data) {
+        const comentariosMapeados = {}
+
+        JSS_COLUMNS.forEach((colConfig, index) => {
+          const colId = colConfig.id
+          const questionTitle =
+            colConfig.header.split(/^[A-Z]\d+:\s/)[1] || colConfig.header
+
+          const valores = data.map((r) => r[colId])
+          const freq = contar(valores)
+          const dataValues = colConfig.labels.map((k) => freq[k] || 0)
+          const totalRespostasValidas = dataValues.reduce((a, b) => a + b, 0)
+
+          if (totalRespostasValidas === 0) {
+            comentariosMapeados[colId] = ''
+            return
+          }
+
+          let comentario = `Internal Title - Questão ${index + 1} (${
+            colConfig.category
+          }):\n`
+
+          if (
+            colConfig.category === 'Demanda' ||
+            colConfig.category === 'Controle'
+          ) {
+            const countAsVezes = freq['Às vezes'] || 0
+            const percAsVezes = calcularPorcentagem(
+              countAsVezes,
+              totalRespostasValidas,
+              1
+            )
+            comentario += `**(${percAsVezes}%) dos empregados** consideram **${questionTitle}** - Às vezes;\n`
+
+            const countFreq = freq['Frequentemente'] || 0
+            const percFreq = calcularPorcentagem(
+              countFreq,
+              totalRespostasValidas,
+              1
+            )
+            comentario += `**(${percFreq}%) dos empregados** consideram **${questionTitle}** - Frequentemente;\n`
+
+            const countNuncaRaramente =
+              (freq['Nunca ou quase nunca'] || 0) + (freq['Raramente'] || 0)
+            const percNuncaRaramente = calcularPorcentagem(
+              countNuncaRaramente,
+              totalRespostasValidas,
+              1
+            )
+            comentario += `**(${percNuncaRaramente}%) dos empregados** consideram **${questionTitle}** - Nunca ou quase nunca/Raramente;`
+          } else if (colConfig.category === 'Apoio Social') {
+            const countConcMais = freq['Concordo mais que discordo'] || 0
+            const percConcMais = calcularPorcentagem(
+              countConcMais,
+              totalRespostasValidas,
+              1
+            )
+            comentario += `**(${percConcMais}%) dos empregados** consideram **${questionTitle}** - Concordo mais que discordo;\n`
+
+            const countConcTot = freq['Concordo totalmente'] || 0
+            const percConcTot = calcularPorcentagem(
+              countConcTot,
+              totalRespostasValidas,
+              1
+            )
+            comentario += `**(${percConcTot}%) dos empregados** consideram **${questionTitle}** - Concordo totalmente;\n`
+
+            const countDiscordo =
+              (freq['Discordo mais que concordo'] || 0) +
+              (freq['Discordo totalmente'] || 0)
+            const percDiscordo = calcularPorcentagem(
+              countDiscordo,
+              totalRespostasValidas,
+              1
+            )
+            comentario += `**(${percDiscordo}%) dos empregados** consideram **${questionTitle}** - Discordo mais que concordo/Discordo totalmente;`
+          }
+
+          comentariosMapeados[colId] = comentario
+        })
+
+        return { commentary: comentariosMapeados, attention: '' }
+      }
+
+      function gerarPontoDeAtencao(colConfig, freq, totalRespostasValidas) {
+        if (totalRespostasValidas === 0) return ''
+
+        const questionTitle =
+          colConfig.header.split(/^[A-Z]\d+:\s/)[1] || colConfig.header
+
+        const riscoLabels = colConfig.unfavorable
+        const atenuacaoLabels = colConfig.favorable
+
+        const countRisco = riscoLabels.reduce(
+          (sum, label) => sum + (freq[label] || 0),
+          0
+        )
+        const percRisco = calcularPorcentagem(
+          countRisco,
+          totalRespostasValidas,
+          1
+        )
+
+        const countAtenuacao = atenuacaoLabels.reduce(
+          (sum, label) => sum + (freq[label] || 0),
+          0
+        )
+        const percAtenuacao = calcularPorcentagem(
+          countAtenuacao,
+          totalRespostasValidas,
+          1
+        )
+
+        let riscoDesc = ''
+        let atenuacaoDesc = ''
+
+        if (
+          colConfig.category === 'Demanda' ||
+          colConfig.id.includes('repetir muitas vezes')
+        ) {
+          riscoDesc = 'frequentemente e às vezes'
+          atenuacaoDesc = 'nunca ou quase nunca/raramente'
+        } else if (colConfig.category === 'Controle') {
+          riscoDesc = 'raramente e nunca ou quase nunca'
+          atenuacaoDesc = 'frequentemente e às vezes'
+        } else if (colConfig.category === 'Apoio Social') {
+          riscoDesc = 'Discordo mais que concordo/Discordo totalmente'
+          atenuacaoDesc = 'Concordo totalmente/Concordo mais que discordo'
+        }
+
+        let pontoDeAtencao = ''
+
+        const nPercRisco = Number(percRisco)
+        const nPercAtenuacao = Number(percAtenuacao)
+
+        if (nPercRisco >= nPercAtenuacao) {
+          pontoDeAtencao = `Predominância em **${questionTitle}** - **(${riscoDesc}) ${percRisco}%**, atenuado por **${percAtenuacao}%** que consideram **(${atenuacaoDesc})**.`
+        } else {
+          pontoDeAtencao = `Predominância em **${questionTitle}** - **(${atenuacaoDesc}) ${percAtenuacao}%**, atenuado por **${percRisco}%** que consideram **(${riscoDesc})**.`
+        }
+
+        return pontoDeAtencao
+      }
+
+      function gerarComentarioIndividual(
+        colConfig,
+        freq,
+        totalRespostasValidas,
+        index
+      ) {
+        let html = `<table class="chart-data-table" id="table-${index}"><thead><tr>`
+
+        const tableHeaders = ['Resposta', 'Contagem (n)']
+        html += tableHeaders.map((h) => `<th>${h}</th>`).join('')
+        html += '</tr></thead><tbody>'
+
+        colConfig.labels.forEach((label) => {
+          const count = freq[label] || 0
+          html += `<tr><td>${label}</td><td>${count}</td></tr>`
+        })
+
+        html += `<tr><td><b>Total</b></td><td><b>${totalRespostasValidas}</b></td></tr>`
+        html += '</tbody></table>'
+
+        return { html: html }
+      }
+
+      document
+        .getElementById('btnGerar')
+        .addEventListener('click', async () => {
+          const chartsDiv = document.getElementById('charts')
+          const commentaryDiv = document.getElementById('commentaryDiv')
+          chartsDiv.innerHTML = ''
+          commentaryDiv.innerHTML = ''
+          document.getElementById('pdfReportContainer').innerHTML = ''
+          chartObjects = []
+
+          if (fullHeaders.length === 0 || excelData.length === 0) {
+            alert('Carregue os dados do Excel primeiro.')
+            return
+          }
+
+          const { commentary: commentsMap } =
+            gerarComentarioGeralDetalhado(excelData)
+          detailedCommentaries = commentsMap
+
+          commentaryDiv.classList.add('hidden')
+
+          let currentCategory = null
+
+          JSS_COLUMNS.forEach((colConfig, index) => {
+            const colId = colConfig.id
+            const questionTitle = colConfig.header
+            const category = colConfig.category
+
+            const valores = excelData.map((r) => r[colId])
+            const freq = contar(valores)
+
+            if (Object.keys(freq).length === 0) return
+
+            const labels = colConfig.labels
+            const dataValues = labels.map((k) => freq[k] || 0)
+
+            const totalRespostasValidas = dataValues.reduce((a, b) => a + b, 0)
+
+            if (totalRespostasValidas === 0) return
+
+            const maxData = Math.max(...dataValues)
+
+            let dimensionHeaderHtml = ''
+
+            if (category !== currentCategory) {
+              currentCategory = category
+              const dimensionTitle = DIMENSION_TITLES[category] || ''
+              const dimensionDesc = DIMENSION_DESCRIPTIONS[category] || ''
+
+              if (dimensionTitle) {
+                const dimensionHeaderDiv = document.createElement('div')
+                dimensionHeaderDiv.className = 'dimension-header'
+                dimensionHeaderDiv.innerHTML = `${dimensionTitle}<span>${dimensionDesc}</span>`
+                chartsDiv.appendChild(dimensionHeaderDiv)
+
+                dimensionHeaderHtml = dimensionHeaderDiv.outerHTML
+              }
+            }
+
+            const individualCommentary = gerarComentarioIndividual(
+              colConfig,
+              freq,
+              totalRespostasValidas,
+              index
+            )
+
+            const pontoAtencaoText = gerarPontoDeAtencao(
+              colConfig,
+              freq,
+              totalRespostasValidas
+            )
+
+            // 1. Definição da variável (CORRETO)
+            const specificCommentText = detailedCommentaries[colId] || ''
+
+            const container = document.createElement('div')
+            container.className = 'chart-report-item-visual'
+            container.id = `visual-item-${index}`
+            container.style.display = 'flex'
+            container.style.flexDirection = 'column'
+            container.style.padding = '20px 0'
+            container.style.borderBottom = '1px solid #eee'
+
+            const htmlTitle = document.createElement('h4')
+            htmlTitle.innerText = questionTitle
+
+            const wrapper = document.createElement('div')
+            wrapper.className = 'chart-wrapper'
+            // AJUSTE: O wrapper de cada gráfico individual agora tem 550px de altura
+            wrapper.style.width = '900px'
+
+            const canvas = document.createElement('canvas')
+            canvas.id = `chart-${index}`
+
+            wrapper.appendChild(canvas)
+            container.appendChild(htmlTitle)
+            container.appendChild(wrapper)
+
+            const dataTableDiv = document.createElement('div')
+            dataTableDiv.innerHTML = individualCommentary.html
+            container.appendChild(dataTableDiv)
+
+            // 2. Uso da variável (CORRETO)
+            if (specificCommentText) {
+              const specificCommentDiv = document.createElement('div')
+              specificCommentDiv.className = 'commentary'
+              specificCommentDiv.style.marginTop = '20px'
+              specificCommentDiv.style.marginBottom = '15px'
+
+              let commentBody = specificCommentText
+                .split('\n')
+                .slice(1)
+                .join('<br>')
+              commentBody = commentBody.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+
+              specificCommentDiv.innerHTML = `<p style="font-weight: bold; margin-bottom: 5px;">${NEW_COMMENTARY_TITLE}</p>${commentBody}`
+              container.appendChild(specificCommentDiv)
+            }
+
+            if (pontoAtencaoText) {
+              const pontoAtencaoDiv = document.createElement('div')
+              pontoAtencaoDiv.className = 'attention-point'
+
+              let formattedAttention = pontoAtencaoText.replace(
+                /\*\*(.*?)\*\*/g,
+                '<b>$1</b>'
+              )
+              pontoAtencaoDiv.innerHTML = formattedAttention
+              container.appendChild(pontoAtencaoDiv)
+            }
+
+            chartsDiv.appendChild(container)
+
+            const chart = new Chart(canvas, {
+              type: 'bar',
+              data: {
+                labels: labels,
+                datasets: [
+                  {
+                    label: 'Frequência',
+                    data: dataValues,
+                    backgroundColor: '#3b82f6',
+                    borderColor: '#2563eb',
+                    borderWidth: 1,
+                    barPercentage: 0.6
+                  }
+                ]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                  y: {
+                    display: false,
+                    beginAtZero: true,
+                    suggestedMax: maxData + (maxData > 0 ? 1 : 1)
+                  },
+                  x: {
+                    grid: { display: false },
+                    ticks: {
+                      maxRotation: 45,
+                      minRotation: 0,
+                      font: { size: 10 }
+                    }
+                  }
+                },
+                layout: {
+                  padding: { top: 25, bottom: 10, left: 10, right: 10 }
+                },
+                plugins: {
+                  legend: { display: false },
+                  title: { display: false },
+                  datalabels: {
+                    anchor: 'end',
+                    align: 'top',
+                    color: '#000',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (value) => value
+                  },
+                  tooltip: { enabled: true }
+                }
+              }
+            })
+
+            // 3. Armazenamento da variável (CORRETO)
+            chartObjects.push({
+              title: questionTitle,
+              chart: chart,
+              chartId: `chart-${index}`,
+              tableHtml: individualCommentary.html,
+              specificCommentText: specificCommentText,
+              pontoAtencaoText: pontoAtencaoText,
+              dimensionHeaderHtml: dimensionHeaderHtml
+            })
+          })
+
+          chartsDiv.style.display = 'block'
+          chartsDiv.style.gridTemplateColumns = 'none'
+
+          document.getElementById('graficosCard').classList.remove('hidden')
+
+          // NOVO: Gerar e mostrar o Dashboard Final (Sem Karasek) na tela
+          await gerarDashboardFinal()
+          document
+            .getElementById('dashboard-final-card')
+            .classList.remove('hidden')
+        })
+
+      // ======================================================================
+      // === FUNÇÃO PARA GERAÇÃO DO DASHBOARD FINAL (COM CORES PROFISSIONAIS E PERCENTUAL NA PIZZA) ===
+      // ======================================================================
+
+      async function gerarDashboardFinal() {
+        // Limpa gráficos anteriores
+        finalCharts.forEach((c) => c.destroy())
+        finalCharts = []
+
+        const categorias = ['Demanda', 'Controle', 'Apoio Social']
+
+        // 1. Processamento das Dimensões para os Gráficos de Resumo (Pizza/Barra)
+        categorias.forEach((cat) => {
+          const isApoio = cat === 'Apoio Social'
+          const labels = isApoio ? LABELS_APOIO_SOCIAL : LABELS_DEMANDA_CONTROLE
+          const suffix = isApoio ? 'apoio' : cat.toLowerCase()
+
+          const cols = JSS_COLUMNS.filter((c) => c.category === cat)
+
+          let somaPorLabel = labels.map(() => 0)
+
+          let dimensionColors
+
+          // Define a paleta de cores consistente com a semântica:
+          // Risco Alto (#1e40af), Risco Moderado (#3b82f6), Fav. Moderado (#9ca3af), Fav. Alto (#d1d5db)
+
+          if (cat === 'Demanda') {
+            // Demanda: Risco é 4 (Frequentemente).
+            // Labels [1, 2, 3, 4] -> Cores [Fav. Alto, Fav. Mod., Risco Mod., Risco Alto]
+            dimensionColors = ['#d1d5db', '#9ca3af', '#3b82f6', '#1e40af']
+          } else if (cat === 'Controle' || cat === 'Apoio Social') {
+            // Controle/Apoio: Risco é 1 (Nunca/Discordo).
+            // Labels [1, 2, 3, 4] -> Cores [Risco Alto, Risco Mod., Fav. Mod., Fav. Alto]
+            dimensionColors = ['#1e40af', '#3b82f6', '#9ca3af', '#d1d5db']
+          }
+
+          let stackedDatasets = labels.map((l, i) => ({
+            label: l,
+            data: [],
+            backgroundColor: dimensionColors[i], // Usa a cor semântica correta
+            // CORREÇÃO: Removemos a borda branca aqui para evitar linhas brancas indesejadas
+            borderWidth: 0,
+            barPercentage: 0.6
+          }))
+          let shortLabels = []
+
+          // Processa dados e calcula o total de respostas válidas
+          let totalRespostasDimensao = 0
+          cols.forEach((col) => {
+            const shortLabel = col.header.split(':')[0].trim() || 'Q'
+            shortLabels.push(shortLabel)
+
+            const vals = excelData.map((r) => r[col.id])
+            const freq = contar(vals)
+            const totalPergunta = labels
+              .map((l) => freq[l] || 0)
+              .reduce((a, b) => a + b, 0)
+
+            totalRespostasDimensao += totalPergunta
+
+            labels.forEach((label, idx) => {
+              const qtd = freq[label] || 0
+              somaPorLabel[idx] += qtd
+
+              // Stacked Bar (%)
+              const perc = totalPergunta > 0 ? (qtd / totalPergunta) * 100 : 0
+              stackedDatasets[idx].data.push(perc)
+            })
+          })
+
+          document.getElementById(`final-qty-${suffix}`).innerText =
+            totalRespostasDimensao
+
+          // GRÁFICO DE PIZZA - Preparação dos dados sem valores zero (CORREÇÃO DA FATIA BRANCA)
+          let pieLabels = []
+          let pieData = []
+          let pieColors = []
+
+          somaPorLabel.forEach((val, idx) => {
+            if (val > 0) {
+              // FILTRO ESSENCIAL: Ignora valores zero
+              pieLabels.push(labels[idx])
+              pieData.push(val)
+              pieColors.push(dimensionColors[idx])
+            }
+          })
+
+          if (pieData.length === 0 && totalRespostasDimensao > 0) {
+            // Caso todos os dados somados sejam 0 (dados inválidos)
+            // Se isso acontecer, ele mostrará um gráfico vazio, mas a fatia branca deve ter desaparecido.
+          }
+
+          // CRIAÇÃO DO GRÁFICO DE PIZZA
+          const ctxPie = document
+            .getElementById(`final-pie-${suffix}`)
+            .getContext('2d')
+          // Se o gráfico existir, destrói antes de criar
+          if (finalCharts.some((c) => c.canvas.id === ctxPie.canvas.id)) {
+            finalCharts.find((c) => c.canvas.id === ctxPie.canvas.id).destroy()
+          }
+
+          const pie = new Chart(ctxPie, {
+            type: 'pie',
+            data: {
+              labels: pieLabels,
+              datasets: [
+                {
+                  data: pieData,
+                  backgroundColor: pieColors, // Cores semânticas aplicadas
+                  // CORREÇÃO ESSENCIAL: Garante que a borda é 0
+                  borderWidth: 0
+                  // CORREÇÃO DA FAIXA BRANCA: Removida a linha 'borderColor' para evitar artefatos
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              // AJUSTE PARA O TAMANHO DA PIZZA
+              layout: { padding: -10 },
+              plugins: {
+                legend: {
+                  // CORRIGIDO: Legenda forçada para o topo
+                  position: 'top',
+                  labels: {
+                    boxWidth: 12,
+                    font: {
+                      size: 14
+                    } /* NOVO AJUSTE: Aumentado de 12 para 14 */
+                  }
+                },
+                // CORREÇÃO: datalabels para exibir o percentual
+                datalabels: {
+                  color: '#fff', // Cor da fonte
+                  font: {
+                    weight: 'bold',
+                    size: 14
+                  } /* NOVO AJUSTE: Aumentado de 12 para 14 */,
+                  // Aumento do blur da sombra para garantir melhor captura no PDF
+                  textShadow: { color: 'rgba(0,0,0,1)', blur: 4 },
+                  formatter: (val, ctx) => {
+                    // O sum deve ser calculado com base APENAS nos dados exibidos
+                    let sum = pieData.reduce((a, b) => a + b, 0)
+                    if (sum === 0) return ''
+                    // NOVO AJUSTE: Não exibe label para fatias muito pequenas (<= 2%)
+                    if (val / sum < 0.02) return ''
+                    return ((val / sum) * 100).toFixed(1) + '%'
+                  }
+                }
+              }
+            }
+          })
+          finalCharts.push(pie)
+
+          // GRÁFICO DE BARRAS EMPILHADAS
+          const ctxBar = document
+            .getElementById(`final-bar-${suffix}`)
+            .getContext('2d')
+
+          // Se o gráfico existir, destrói antes de criar
+          if (finalCharts.some((c) => c.canvas.id === ctxBar.canvas.id)) {
+            finalCharts.find((c) => c.canvas.id === ctxBar.canvas.id).destroy()
+          }
+
+          const bar = new Chart(ctxBar, {
+            type: 'bar',
+            data: { labels: shortLabels, datasets: stackedDatasets },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              layout: { padding: { top: 10, right: 20 } },
+              scales: {
+                x: {
+                  stacked: true,
+                  min: 0,
+                  max: 100,
+                  ticks: {
+                    callback: (v) => v + '%',
+                    font: { size: 14 }
+                  } /* NOVO AJUSTE: Aumentado de 12 para 14 */
+                },
+                y: {
+                  stacked: true,
+                  grid: { display: false },
+                  ticks: {
+                    font: { size: 14 }
+                  } /* NOVO AJUSTE: Aumentado de 12 para 14 */
+                }
+              },
+              plugins: {
+                // HABILITA A LEGENDA
+                legend: {
+                  display: true,
+                  position: 'bottom',
+                  labels: {
+                    boxWidth: 12,
+                    font: {
+                      size: 13
+                    } /* NOVO AJUSTE: Aumentado de 11 para 13 */
+                  }
+                },
+                // CORREÇÃO: datalabels para mostrar percentual dentro da barra
+                datalabels: {
+                  // NOVO: Lógica de cor para legibilidade (claro no escuro / escuro no claro)
+                  color: (ctx) => {
+                    const color = dimensionColors[ctx.datasetIndex]
+                    if (color === '#1e40af' || color === '#3b82f6') {
+                      return '#fff' // Retorna branco para fundo escuro
+                    }
+                    return '#333'
+                  },
+                  font: {
+                    size: 13,
+                    weight: 'bold'
+                  } /* NOVO AJUSTE: Aumentado de 11 para 13 */,
+                  // CORREÇÃO: Mostra apenas se o valor for >= 5%
+                  formatter: (v) => (v >= 5 ? Math.round(v) + '%' : '')
+                }
+              }
+            }
+          })
+          finalCharts.push(bar)
+        })
+      }
+
+      // ======================================================================
+      // === FUNÇÕES PDF ===
+      // ======================================================================
+
+      function addReferenceBox(doc, pageMargin, pageH) {
+        // ... (Corpo da função de Referência)
+        const refText = [
+          'JSS - JOB STRESS SCALE [ESCALA DE ESTRESSE NO TRABALHO]',
+          'Referências: Alves MGM, Chor D, Faerstein E, Lopes CS, Wemeck GL. Versão resumida da "Job Stress Scale": adaptação para português.',
+          'Rev. Saúde Pública. 2004. Karasek RA. Theorell T. Healthy work-stress. productivity, and the reconstruction of working life. New York: Basic Books: 1990.'
+        ]
+
+        const BOX_WIDTH_MM = 190
+        const BOX_HEIGHT_MM = 15
+        const BORDER_COLOR = 150
+        const TEXT_COLOR = 50
+        const FONT_SIZE = 7
+        const LINE_SPACING = 3.5
+
+        const BOX_X_MM = (doc.internal.pageSize.getWidth() - BOX_WIDTH_MM) / 2
+        const BOX_Y_MM = pageH - pageMargin - BOX_HEIGHT_MM
+
+        doc.setDrawColor(BORDER_COLOR)
+        doc.setLineWidth(0.2)
+        doc.rect(BOX_X_MM, BOX_Y_MM, BOX_WIDTH_MM, BOX_HEIGHT_MM)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(FONT_SIZE)
+        doc.setTextColor(TEXT_COLOR)
+
+        let currentY = BOX_Y_MM + 3
+
+        refText.forEach((line) => {
+          const lines = doc.splitTextToSize(line, BOX_WIDTH_MM - 4)
+          doc.text(lines, BOX_X_MM + 2, currentY)
+          currentY += lines.length * LINE_SPACING
+        })
+
+        doc.setFillColor(255, 255, 255)
+        doc.setDrawColor(0, 0, 0)
+      }
+
+      function addHeaderFooter(doc, pageNumber, totalPages) {
+        // ... (Corpo da função Header/Footer)
+        const HEADER_HEIGHT_MM = 15
+        const FOOTER_HEIGHT_MM = 15
+        const PAGE_MARGIN_MM = 10
+        const PAGE_WIDTH_MM = doc.internal.pageSize.getWidth()
+        const PAGE_HEIGHT_MM = doc.internal.pageSize.getHeight()
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.setTextColor(37, 99, 235) // Corrigida para azul
+        doc.text(
+          'Relatório de Análise - Job Stress Scale',
+          PAGE_MARGIN_MM,
+          HEADER_HEIGHT_MM - 5
+        )
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(100, 100, 100)
+
+        const pageText = `Página ${pageNumber} de ${totalPages}`
+
+        doc.text(
+          pageText,
+          PAGE_WIDTH_MM - PAGE_MARGIN_MM,
+          HEADER_HEIGHT_MM - 5,
+          { align: 'right' }
+        )
+
+        doc.setDrawColor(200, 200, 200)
+        doc.line(
+          PAGE_MARGIN_MM,
+          HEADER_HEIGHT_MM,
+          PAGE_WIDTH_MM - PAGE_MARGIN_MM,
+          HEADER_HEIGHT_MM
+        )
+
+        doc.setDrawColor(200, 200, 200)
+        doc.line(
+          PAGE_MARGIN_MM,
+          PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM,
+          PAGE_WIDTH_MM - PAGE_MARGIN_MM,
+          PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM
+        )
+
+        const signatureLines = [
+          'Engenheiro de Segurança do Trabalho',
+          'Rogério Luiz Mota de Oliveira',
+          'CREA RNP: 180630565-8 - PE 39325D'
+        ]
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(50, 50, 50)
+
+        let textY = PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM + 12
+
+        for (let i = signatureLines.length - 1; i >= 0; i--) {
+          const line = signatureLines[i]
+
+          doc.text(line, PAGE_WIDTH_MM - PAGE_MARGIN_MM, textY, {
+            align: 'right'
+          })
+
+          textY -= 3.5
+        }
+      }
+
+      // ======================================================================
+      // === EXPORTAR PDF (CONSOLIDADO E CORRIGIDO) ===
+      // ======================================================================
+      document.getElementById('btnPDF').addEventListener('click', async () => {
+        if (chartObjects.length === 0) {
+          alert('Gere os gráficos primeiro.')
+          return
+        }
+
+        const btn = document.getElementById('btnPDF')
+        const oldTxt = btn.innerText
+        btn.innerText = 'Gerando PDF...'
+        btn.disabled = true
+
+        const PAGE_MARGIN_MM = 10
+        const COVER_PAGE_MARGIN_MM = 15
+        const HEADER_HEIGHT_MM = 15
+        const FOOTER_HEIGHT_MM = 15
+
+        // Total de páginas: Capa (1) + Explicação (1) + Gráficos (n) + Dashboard Final (1)
+        const TOTAL_PAGES = chartObjects.length + 3
+
+        const doc = new jsPDF('p', 'mm', 'a4')
+
+        let PAGE_WIDTH_PORTRAIT = doc.internal.pageSize.getWidth()
+        let PAGE_HEIGHT_PORTRAIT = doc.internal.pageSize.getHeight()
+        const PORTRAIT_CONTENT_WIDTH =
+          PAGE_WIDTH_PORTRAIT - COVER_PAGE_MARGIN_MM * 2
+
+        // Dimensões A4 Paisagem (297x210)
+        const PAGE_WIDTH_LANDSCAPE = 297
+        const PAGE_HEIGHT_LANDSCAPE = 210
+
+        // Largura do gráfico/conteúdo principal em paisagem
+        const LANDSCAPE_GRAPH_WIDTH_MM = 250
+        const LANDSCAPE_CONTENT_START_Y_MM = HEADER_HEIGHT_MM + 5
+        const LANDSCAPE_MAX_CONTENT_HEIGHT_MM =
+          PAGE_HEIGHT_LANDSCAPE - HEADER_HEIGHT_MM - FOOTER_HEIGHT_MM - 12
+
+        // -----------------------------------------------------------
+        // PÁGINA DE ROSTO (CAPA) - PÁGINA 1 (PORTRAIT)
+        // -----------------------------------------------------------
+        const currentDate = new Date().toLocaleDateString('pt-BR')
+        let cursorY = PAGE_HEIGHT_PORTRAIT / 2 - 40
+
+        doc.setFillColor(248, 248, 248)
+        doc.rect(0, 0, PAGE_WIDTH_PORTRAIT, PAGE_HEIGHT_PORTRAIT, 'F')
+        doc.setFillColor(255, 255, 255)
+        doc.setDrawColor(0, 0, 0)
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(24)
+        doc.setTextColor(30, 30, 30)
+        doc.text(companyName, PAGE_WIDTH_PORTRAIT / 2, cursorY, {
+          align: 'center'
+        })
+        cursorY += 15
+
+        doc.setDrawColor(37, 99, 235)
+        doc.setLineWidth(1.5)
+        doc.line(
+          PAGE_WIDTH_PORTRAIT / 2 - 50,
+          cursorY,
+          PAGE_WIDTH_PORTRAIT / 2 + 50,
+          cursorY
+        )
+        cursorY += 15
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(28)
+        doc.setTextColor(37, 99, 235)
+        doc.text('JSS - Job Stress Scale', PAGE_WIDTH_PORTRAIT / 2, cursorY, {
+          align: 'center'
+        })
+        cursorY += 15
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(14)
+        doc.setTextColor(0, 0, 0)
+
+        const subtitleLines = doc.splitTextToSize(
+          'INVENTÁRIO DE RISCOS/PERIGOS PSICOSSOCIAIS RELACIONADOS AO TRABALHO - NR 01',
+          PORTRAIT_CONTENT_WIDTH
+        )
+        doc.text(subtitleLines, PAGE_WIDTH_PORTRAIT / 2, cursorY, {
+          align: 'center'
+        })
+        cursorY += subtitleLines.length * 8
+
+        cursorY += 15
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        doc.setTextColor(37, 99, 235)
+
+        doc.text(currentDate, PAGE_WIDTH_PORTRAIT / 2, cursorY, {
+          align: 'center'
+        })
+
+        addReferenceBox(doc, COVER_PAGE_MARGIN_MM, PAGE_HEIGHT_PORTRAIT)
+
+        // -----------------------------------------------------------
+        // PÁGINA DE TEXTO EXPLICATIVO - PÁGINA 2 (PORTRAIT)
+        // -----------------------------------------------------------
+        doc.addPage()
+        addHeaderFooter(doc, 2, TOTAL_PAGES)
+
+        const explanatoryText = {
+          title: 'Aplicação da Job Stress Scale (JSS)',
+          paragraphs: [
+            'A aplicação da Job Stress Scale (JSS) permitiu uma avaliação sistemática dos principais fatores associados ao estresse ocupacional, considerando as dimensões demanda psicológica, controle sobre o trabalho e apoio social. Os resultados obtidos forneceram uma compreensão abrangente da relação entre as características do trabalho e a experiência subjetiva dos participantes, possibilitando identificar níveis diferenciados de risco para o estresse laboral.',
+            'A metodologia utilizada mostrou-se eficaz para captar nuances importantes do contexto organizacional, permitindo analisar não apenas a intensidade das exigências do trabalho, mas também o grau de autonomia percebido pelos trabalhadores e a qualidade das interações sociais no ambiente profissional. Dessa forma, a JSS contribuiu para mapear possíveis fatores de vulnerabilidade e, simultaneamente, reconhecer aspectos protetivos presentes na rotina laboral.',
+            'Em síntese, a utilização da Job Stress Scale demonstrou-se uma ferramenta válida e relevante para favorecer o diagnóstico situacional e orientar futuras intervenções voltadas à promoção da saúde ocupacional. Os resultados obtidos servirão como base para discussões mais amplas sobre condições de trabalho e para o desenvolvimento de estratégias que visem à melhoria do bem-estar e da qualidade de vida dos profissionais avaliados.'
+          ]
+        }
+
+        let currentYExplanatory = HEADER_HEIGHT_MM + 5 + 5
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(16)
+        doc.setTextColor(37, 99, 235)
+        doc.text(explanatoryText.title, PAGE_MARGIN_MM, currentYExplanatory)
+        currentYExplanatory += 15
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(12)
+        doc.setTextColor(0, 0, 0)
+
+        explanatoryText.paragraphs.forEach((paragraph) => {
+          const lines = doc.splitTextToSize(paragraph, PORTRAIT_CONTENT_WIDTH)
+          doc.text(lines, PAGE_WIDTH_PORTRAIT / 2, currentYExplanatory, {
+            align: 'center'
+          })
+          currentYExplanatory += lines.length * 7 + 8
+        })
+
+        // -----------------------------------------------------------
+        // GRÁFICOS INDIVIDUAIS - PÁGINA 3 em diante (LANDSCAPE)
+        // -----------------------------------------------------------
+
+        // Transição para Paisagem
+        doc.addPage('a4', 'l')
+
+        const pdfContainer = document.getElementById('pdfReportContainer')
+        pdfContainer.innerHTML = ''
+
+        const GRAPH_START_X_MM =
+          (PAGE_WIDTH_LANDSCAPE - LANDSCAPE_GRAPH_WIDTH_MM) / 2
+
+        for (let i = 0; i < chartObjects.length; i++) {
+          const item = chartObjects[i]
+          const currentPageNumber = i + 3
+
+          addHeaderFooter(doc, currentPageNumber, TOTAL_PAGES)
+
+          const itemWrapper = document.createElement('div')
+          itemWrapper.className = 'pdf-report-item'
+
+          if (item.dimensionHeaderHtml) {
+            itemWrapper.innerHTML += item.dimensionHeaderHtml
+          }
+
+          itemWrapper.innerHTML += `<h2>${item.title}</h2>`
+
+          const chartCanvas = document.getElementById(item.chartId)
+          if (!chartCanvas) {
+            console.error(`Canvas ${item.chartId} não encontrado.`)
+            continue
+          }
+
+          try {
+            const chartImg = chartCanvas.toDataURL('image/png', 1.0)
+            // A altura do gráfico individual agora é 550px no DOM
+            itemWrapper.innerHTML += `<img src="${chartImg}" style="width: 850px; height: 530px; display: block; margin: 0 auto 10px auto; border: 1px solid #ccc;">`
+          } catch (e) {
+            itemWrapper.innerHTML += `<p style="color: red; text-align: center;">[ERRO ao carregar imagem do gráfico]</p>`
+          }
+
+          itemWrapper.innerHTML += item.tableHtml
+
+          // A variável específica foi corrigida no bloco 'btnGerar'
+          if (item.specificCommentText) {
+            let commentBody = item.specificCommentText
+              .split('\n')
+              .slice(1)
+              .join('<br>')
+            commentBody = commentBody.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+
+            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px;">${NEW_COMMENTARY_TITLE}</p>`
+            itemWrapper.innerHTML += `<div class="commentary" style="white-space: normal;">${commentBody}</div>`
+          }
+
+          if (item.pontoAtencaoText) {
+            let formattedAttention = item.pontoAtencaoText.replace(
+              /\*\*(.*?)\*\*/g,
+              '<b>$1</b>'
+            )
+            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px;">Ponto de Atenção:</p>`
+            itemWrapper.innerHTML += `<div class="attention-point" style="white-space: normal;">${formattedAttention}</div>`
+          }
+
+          pdfContainer.appendChild(itemWrapper)
+
+          try {
+            const canvas = await html2canvas(itemWrapper, {
+              scale: 3,
+              useCORS: true,
+              logging: false,
+              width: pdfContainer.offsetWidth,
+              height: itemWrapper.offsetHeight
+            })
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.9)
+            const imgWidth = LANDSCAPE_GRAPH_WIDTH_MM
+            const imgHeightProportional =
+              (canvas.height * imgWidth) / canvas.width
+            let finalImgHeight = Math.min(
+              imgHeightProportional,
+              LANDSCAPE_MAX_CONTENT_HEIGHT_MM
+            )
+
+            doc.addImage(
+              imgData,
+              'JPEG',
+              GRAPH_START_X_MM,
+              LANDSCAPE_CONTENT_START_Y_MM,
+              imgWidth,
+              finalImgHeight
+            )
+          } catch (e) {
+            console.error(`Erro ao gerar item ${item.title} no PDF:`, e)
+            doc.text(
+              `[ERRO ao gerar item ${item.title}: ${e.message}]`,
+              PAGE_MARGIN_MM,
+              LANDSCAPE_CONTENT_START_Y_MM
+            )
+          }
+
+          pdfContainer.innerHTML = ''
+          if (i < chartObjects.length - 1) {
+            doc.addPage('a4', 'l')
+          }
+        }
+
+        // -----------------------------------------------------------
+        // DASHBOARD FINAL (DISTRIBUIÇÃO) - ÚLTIMA PÁGINA (LANDSCAPE)
+        // -----------------------------------------------------------
+
+        // 1. Garante que os gráficos foram gerados e estão no DOM visível
+        await gerarDashboardFinal()
+
+        // AJUSTE PARA FAIXA BRANCA: Aumenta o atraso de captura para 1000ms
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        // 2. Captura o container VISÍVEL do Dashboard com ESCALA 6 (AUMENTO PARA MÁXIMA NITIDEZ)
+        const dashContainerVisible = document.getElementById(
+          'dashboard-final-container'
+        )
+
+        // Adiciona uma nova página Paisagem
+        doc.addPage('a4', 'l')
+        const currentPageNumber = TOTAL_PAGES
+        addHeaderFooter(doc, currentPageNumber, TOTAL_PAGES)
+
+        // NOVO AJUSTE: ESCALA 6 para máxima nitidez e tamanho
+        const canvasDash = await html2canvas(dashContainerVisible, {
+          scale: 6,
+          useCORS: true,
+          logging: false
+        })
+
+        const imgDash = canvasDash.toDataURL('image/jpeg', 0.9)
+
+        // Ajusta a imagem na página A4 Paisagem (297 x 210 mm)
+        const pdfW = 277 // Usa 277mm (297 - 20mm margem)
+        const pdfH_proportional = (canvasDash.height * pdfW) / canvasDash.width
+        const X_START = 10
+        const Y_START = HEADER_HEIGHT_MM + 5
+
+        const MAX_HEIGHT =
+          PAGE_HEIGHT_LANDSCAPE - HEADER_HEIGHT_MM - FOOTER_HEIGHT_MM - 5
+
+        let finalPdfH = Math.min(pdfH_proportional, MAX_HEIGHT)
+
+        doc.addImage(imgDash, 'JPEG', X_START, Y_START, pdfW, finalPdfH)
+
+        // Salva
+        doc.save('Relatorio_JSS_Otimizado_v8_Final.pdf')
+        btn.innerText = oldTxt
+        btn.disabled = false
+      })
+    </script>
+  </body>
+</html>
