@@ -154,7 +154,7 @@
         margin-top: 5px;
       }
 
-      /* === ESTILOS ESPECÍFICOS PARA O PDF (REDUÇÃO DE FONTE) === */
+      /* === ESTILOS ESPECÍFICOS PARA O PDF (REDUÇÃO E AUMENTO DE FONTE) === */
       #pdfReportContainer {
         position: absolute;
         left: -9999px;
@@ -180,20 +180,20 @@
         color: #2563eb;
       }
 
-      /* Redução de Fonte para Comentário/Atenção (PDF) */
+      /* CORREÇÃO: Aumento de Fonte para Comentário/Atenção (PDF) */
       #pdfReportContainer .commentary,
       #pdfReportContainer .attention-point {
         padding: 10px;
-        /* Aumento: 10px -> 11px */
-        font-size: 11px;
+        /* NOVO AJUSTE: Aumentado de 11px para 12px para melhor legibilidade */
+        font-size: 12px;
         margin-top: 10px;
         margin-bottom: 10px;
       }
 
-      /* Redução de Fonte para Tabela de Dados (PDF) */
+      /* CORREÇÃO: Aumento de Fonte para Tabela de Dados (PDF) */
       #pdfReportContainer .chart-data-table {
-        /* Aumento: 10px -> 11px */
-        font-size: 11px;
+        /* NOVO AJUSTE: Aumentado de 11px para 12px para melhor legibilidade */
+        font-size: 12px;
       }
       #pdfReportContainer .chart-data-table th,
       #pdfReportContainer .chart-data-table td {
@@ -208,8 +208,8 @@
         font-size: 14px;
       }
       #pdfReportContainer .dimension-header span {
-        /* Aumento: 10px -> 11px */
-        font-size: 11px;
+        /* NOVO AJUSTE: Aumentado de 11px para 12px para melhor legibilidade */
+        font-size: 12px;
       }
       /* =========================================
          ESTILOS ESPECÍFICOS PARA O DASHBOARD FINAL (PDF/SCREEN CAPTURE)
@@ -1611,6 +1611,7 @@
             itemWrapper.innerHTML += `<p style="color: red; text-align: center;">[ERRO ao carregar imagem do gráfico]</p>`
           }
 
+          // CORREÇÃO: As tabelas e textos abaixo herdarão o novo font-size: 12px
           itemWrapper.innerHTML += item.tableHtml
 
           // A variável específica foi corrigida no bloco 'btnGerar'
@@ -1622,6 +1623,7 @@
             commentBody = commentBody.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
 
             itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px;">${NEW_COMMENTARY_TITLE}</p>`
+            // OBS: O font-size é ajustado pela classe 'commentary' que está em 12px agora.
             itemWrapper.innerHTML += `<div class="commentary" style="white-space: normal;">${commentBody}</div>`
           }
 
@@ -1631,6 +1633,7 @@
               '<b>$1</b>'
             )
             itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px;">Ponto de Atenção:</p>`
+            // OBS: O font-size é ajustado pela classe 'attention-point' que está em 12px agora.
             itemWrapper.innerHTML += `<div class="attention-point" style="white-space: normal;">${formattedAttention}</div>`
           }
 
@@ -1638,7 +1641,8 @@
 
           try {
             const canvas = await html2canvas(itemWrapper, {
-              scale: 3,
+              // NOVO AJUSTE: Aumento da escala para 4 para maior nitidez
+              scale: 4,
               useCORS: true,
               logging: false,
               width: pdfContainer.offsetWidth,
@@ -1687,7 +1691,7 @@
         // AJUSTE PARA FAIXA BRANCA: Aumenta o atraso de captura para 1000ms
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        // 2. Captura o container VISÍVEL do Dashboard com ESCALA 6 (AUMENTO PARA MÁXIMA NITIDEZ)
+        // 2. Captura o container VISÍVEL do Dashboard com ESCALA 6 (MÁXIMA NITIDEZ)
         const dashContainerVisible = document.getElementById(
           'dashboard-final-container'
         )
@@ -1697,7 +1701,7 @@
         const currentPageNumber = TOTAL_PAGES
         addHeaderFooter(doc, currentPageNumber, TOTAL_PAGES)
 
-        // NOVO AJUSTE: ESCALA 6 para máxima nitidez e tamanho
+        // ESCALA 6 para máxima nitidez e tamanho
         const canvasDash = await html2canvas(dashContainerVisible, {
           scale: 6,
           useCORS: true,
@@ -1720,7 +1724,7 @@
         doc.addImage(imgDash, 'JPEG', X_START, Y_START, pdfW, finalPdfH)
 
         // Salva
-        doc.save('Relatorio_JSS_Otimizado_v8_Final.pdf')
+        doc.save('Relatorio_JSS_Otimizado_v9_Final.pdf')
         btn.innerText = oldTxt
         btn.disabled = false
       })
