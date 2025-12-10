@@ -13,6 +13,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
     <style>
       body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -41,8 +43,8 @@
       }
       .chart-wrapper {
         position: relative;
-        /* AJUSTE PARA 550PX: Aumentado de 400px para 550px (para gráficos individuais) */
-        height: 550px;
+        /* AJUSTE PARA 300PX: Reduzido de 400px para 300px (para gráficos individuais) */
+        height: 300px;
         width: 100%;
       }
       .grid h4 {
@@ -91,7 +93,7 @@
       .commentary {
         white-space: pre-wrap;
         padding: 15px;
-        border: 1px solid #ddd;
+        border: 1px solid #2563eb; /* ALTERADO: Borda azul (mesma cor da borda esquerda) */
         border-left: 5px solid #2563eb;
         background-color: #f9f9ff;
         border-radius: 4px;
@@ -106,6 +108,17 @@
         border-radius: 4px;
         margin-top: 15px;
         font-weight: bold;
+        font-size: 13px;
+      }
+
+      /* Estilos GERAIS para Plano de Ação (na tela) */
+      .action-plan-box {
+        padding: 15px;
+        border: 1px solid #10b981; /* Verde esmeralda */
+        border-left: 5px solid #10b981;
+        background-color: #ecfdf5; /* Fundo verde muito claro */
+        border-radius: 4px;
+        margin-top: 15px;
         font-size: 13px;
       }
 
@@ -154,13 +167,13 @@
         margin-top: 5px;
       }
 
-      /* === ESTILOS ESPECÍFICOS PARA O PDF (REDUÇÃO E AUMENTO DE FONTE) === */
+      /* === ESTILOS ESPECÍFICOS PARA O PDF (REDUÇÃO DE FONTE) === */
       #pdfReportContainer {
         position: absolute;
         left: -9999px;
         top: -9999px;
-        /* Largura ajustada para o formato Paisagem (250mm, aprox. 880px) */
-        width: 880px;
+        /* Largura padrão, ajustada dinamicamente pelo JS para Paisagem/Retrato */
+        width: 880px; /* VALOR AJUSTADO PARA SERVIR DE BASE PARA LANDSCAPE */
         padding: 0;
         background: white;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -180,20 +193,21 @@
         color: #2563eb;
       }
 
-      /* CORREÇÃO: Aumento de Fonte para Comentário/Atenção (PDF) */
+      /* Redução de Fonte para Comentário/Atenção (PDF) */
       #pdfReportContainer .commentary,
-      #pdfReportContainer .attention-point {
+      #pdfReportContainer .attention-point,
+      #pdfReportContainer .action-plan-box {
         padding: 10px;
-        /* NOVO AJUSTE: Aumentado de 11px para 12px para melhor legibilidade */
-        font-size: 12px;
+        /* Aumento: 10px -> 11px */
+        font-size: 11px;
         margin-top: 10px;
         margin-bottom: 10px;
       }
 
-      /* CORREÇÃO: Aumento de Fonte para Tabela de Dados (PDF) */
+      /* Redução de Fonte para Tabela de Dados (PDF) */
       #pdfReportContainer .chart-data-table {
-        /* NOVO AJUSTE: Aumentado de 11px para 12px para melhor legibilidade */
-        font-size: 12px;
+        /* Aumento: 10px -> 11px */
+        font-size: 11px;
       }
       #pdfReportContainer .chart-data-table th,
       #pdfReportContainer .chart-data-table td {
@@ -208,8 +222,8 @@
         font-size: 14px;
       }
       #pdfReportContainer .dimension-header span {
-        /* NOVO AJUSTE: Aumentado de 11px para 12px para melhor legibilidade */
-        font-size: 12px;
+        /* Aumento: 10px -> 11px */
+        font-size: 11px;
       }
       /* =========================================
          ESTILOS ESPECÍFICOS PARA O DASHBOARD FINAL (PDF/SCREEN CAPTURE)
@@ -262,7 +276,7 @@
         padding: 5px;
       }
       .dash-qty-label {
-        font-size: 14px; /* NOVO AJUSTE: Aumentado de 12px para 14px */
+        font-size: 14px; /* NOVO AJUSTE: Aumentado de 12 para 14px */
         font-weight: bold;
         text-align: center;
         margin-bottom: 5px;
@@ -410,8 +424,13 @@
       // === CONSTANTES GLOBAIS ===
       // ======================================================================
 
+      // Modificado para atender a solicitação do usuário: primeira letra minúscula, cor AZUL no render, e remoção dos dois pontos.
       const NEW_COMMENTARY_TITLE =
-        'Comentários Gerais - Análise do Ergonomista Pesquisador sobre os dados coletados:'
+        'Comentários gerais - Análise do Ergonomista Pesquisador sobre os dados coletados'
+      // Novo título para Ponto de Atenção com cor LARANJA no render, e remoção dos dois pontos.
+      const ATTENTION_POINT_TITLE = 'Ponto de atenção'
+      // Novo título para Plano de Ação com primeira letra maiúscula e cor VERDE no render.
+      const ACTION_PLAN_TITLE = 'Plano de ação proposto'
 
       // CORES PARA O DASHBOARD KARASEK (Atualizadas para profissional)
       // Ordem: 1. Azul Escuro, 2. Azul Médio, 3. Cinza Neutro, 4. Cinza Claro
@@ -429,6 +448,46 @@
         'Discordo mais que concordo': 2,
         'Concordo mais que discordo': 3,
         'Concordo totalmente': 4
+      }
+
+      // ======================================================================
+      // === CONSTANTE NOVO PLANO DE AÇÃO ===
+      // ======================================================================
+      const ACTION_PLAN_TEXTS = {
+        'Com que frequência você tem que fazer suas tarefas de trabalho com muita rapidez?':
+          'D1 – Identificar os fatores organizacionais que influenciam a cadência e velocidade na realização das tarefas de trabalho.',
+        'Com que frequência você tem que trabalhar intensamente (isto é, produzir muito em pouco tempo)?':
+          'D2 – Identificar os fatores organizacionais que influenciam a intensidade de produção na realização das tarefas de trabalho.',
+        'Seu trabalho exige demais de você?':
+          'D3 – Avaliar o nível de exigência requerida para realização das tarefas de trabalho.',
+        'Você tem tempo suficiente para cumprir todas as tarefas de seu trabalho?':
+          'D4 – Avaliar o conteúdo do tempo necessário para realização das tarefas de trabalho.',
+        'O seu trabalho costuma apresentar exigências contraditórias ou discordantes?':
+          'D5 – Identificar as exigências contraditórias ou discordantes presentes nas tarefas de trabalho.',
+        'Você tem possibilidade de aprender coisas novas em seu trabalho?':
+          'C1 – Revisar sistematicamente as possibilidades de novos aprendizados na realização das tarefas de trabalho.',
+        'Seu trabalho exige muita habilidade ou conhecimentos especializados?':
+          'C2 – Avaliar sistematicamente os níveis de exigência quanto as habilidades ou conhecimentos especializados requeridos na realização das tarefas.',
+        'Seu trabalho exige que você tome iniciativas?':
+          'C3 – Identificar a presença da tomada de iniciativas necessárias a realização das tarefas de trabalho.',
+        'No seu trabalho, você tem que repetir muitas vezes as mesmas tarefas?':
+          'C4 – Avaliar o nível de repetitividade das mesmas tarefas realizadas.',
+        'Você pode escolher "Como" fazer o seu trabalho?':
+          'C5 – Avaliar o nível da percepção de autonomia dos empregados no como podem escolher como fazer no seu trabalho.',
+        'Você pode escolher "O QUE" fazer no seu trabalho?':
+          'C6 – Avaliar o nível de rigidez na possibilidade do que podem fazer nas tarefas do seu trabalho.',
+        'Existe um ambiente calmo e agradável onde trabalho.':
+          'A1 – Avaliar sistematicamente a percepção de calma e agradável presente no seu ambiente de trabalho.',
+        'No trabalho, nos relacionamos bem uns com os outros.':
+          'A2 - Avaliar sistematicamente a percepção dos empregados quanto a qualidade dos relacionamentos no ambiente de trabalho.',
+        'Eu posso contar com o apoio dos meus colegas de trabalho.':
+          'A3 – Incentivar sistematicamente apoio entre colegas de trabalho.',
+        'Se eu não estiver num bom dia, meus colegas compreendem.':
+          'A4 – Incentivar sistematicamente a compreensão entre os colegas de trabalho em dias ruins.',
+        'No trabalho, eu me relaciono bem com meus chefes.':
+          'A5 - Incentivar sistematicamente o bom relacionamento entre líderes e liderados.',
+        'Eu gosto de trabalhar com meus colegas.':
+          'A6 – Avaliar sistematicamente o clima de trabalho entre colegas no ambiente de trabalho.'
       }
 
       // Mapeamento de Colunas (usaremos a ID para obter o score)
@@ -614,7 +673,8 @@
           labels,
           riskLabels,
           favorable,
-          unfavorable
+          unfavorable,
+          actionPlanText: ACTION_PLAN_TEXTS[col.id] || ''
         }
       })
 
@@ -654,9 +714,11 @@
 
             // Captura do Nome da Empresa na linha 6 (índice 5), coluna B (índice 1)
             const companyNameRow = rawData[5]
+            // --- INÍCIO DA CORREÇÃO ---
             companyName =
               String(companyNameRow[1]).trim() ||
               'Nome da Empresa Não Identificado'
+            // --- FIM DA CORREÇÃO ---
 
             const headers = rawData[4]
 
@@ -960,7 +1022,10 @@
               totalRespostasValidas
             )
 
-            // 1. Definição da variável (CORRETO)
+            // Captura o texto do plano de ação
+            const actionPlanText = colConfig.actionPlanText || ''
+
+            // 1. Definição da variável
             const specificCommentText = detailedCommentaries[colId] || ''
 
             const container = document.createElement('div')
@@ -976,8 +1041,9 @@
 
             const wrapper = document.createElement('div')
             wrapper.className = 'chart-wrapper'
-            // AJUSTE: O wrapper de cada gráfico individual agora tem 550px de altura
-            wrapper.style.width = '900px'
+            // AJUSTE: O wrapper de cada gráfico individual agora tem 300px de altura (do CSS)
+            // LARGURA MANTIDA: 650px
+            wrapper.style.width = '650px'
 
             const canvas = document.createElement('canvas')
             canvas.id = `chart-${index}`
@@ -990,7 +1056,7 @@
             dataTableDiv.innerHTML = individualCommentary.html
             container.appendChild(dataTableDiv)
 
-            // 2. Uso da variável (CORRETO)
+            // 2. Comentários Gerais (Título em Azul)
             if (specificCommentText) {
               const specificCommentDiv = document.createElement('div')
               specificCommentDiv.className = 'commentary'
@@ -1003,10 +1069,12 @@
                 .join('<br>')
               commentBody = commentBody.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
 
-              specificCommentDiv.innerHTML = `<p style="font-weight: bold; margin-bottom: 5px;">${NEW_COMMENTARY_TITLE}</p>${commentBody}`
+              // Título em AZUL
+              specificCommentDiv.innerHTML = `<p style="font-weight: bold; margin-bottom: 5px; color: #2563eb;">${NEW_COMMENTARY_TITLE}</p>${commentBody}`
               container.appendChild(specificCommentDiv)
             }
 
+            // Ponto de Atenção (Título em Laranja)
             if (pontoAtencaoText) {
               const pontoAtencaoDiv = document.createElement('div')
               pontoAtencaoDiv.className = 'attention-point'
@@ -1015,8 +1083,21 @@
                 /\*\*(.*?)\*\*/g,
                 '<b>$1</b>'
               )
-              pontoAtencaoDiv.innerHTML = formattedAttention
+
+              // Adiciona o título Ponto de Atenção com cor LARANJA
+              pontoAtencaoDiv.innerHTML = `<p style="font-weight: bold; margin-bottom: 5px; color: #f97316;">${ATTENTION_POINT_TITLE}</p>${formattedAttention}`
               container.appendChild(pontoAtencaoDiv)
+            }
+
+            // Plano de Ação Proposto (Título em Title Case e Verde)
+            if (actionPlanText) {
+              const actionPlanDiv = document.createElement('div')
+              actionPlanDiv.className = 'action-plan-box'
+
+              // Título com primeira letra maiúscula e cor verde (mantida)
+              actionPlanDiv.innerHTML = `<p style="font-weight: bold; margin-bottom: 5px; color: #047857;">${ACTION_PLAN_TITLE}</p>
+                ${actionPlanText}`
+              container.appendChild(actionPlanDiv)
             }
 
             chartsDiv.appendChild(container)
@@ -1051,7 +1132,8 @@
                     ticks: {
                       maxRotation: 45,
                       minRotation: 0,
-                      font: { size: 10 }
+                      font: { size: 10 },
+                      color: '#000' // AJUSTE: Cor do texto dos ticks para preto puro
                     }
                   }
                 },
@@ -1064,7 +1146,7 @@
                   datalabels: {
                     anchor: 'end',
                     align: 'top',
-                    color: '#000',
+                    color: '#000', // Já era preto, mantido para garantir
                     font: { weight: 'bold', size: 11 },
                     formatter: (value) => value
                   },
@@ -1081,7 +1163,9 @@
               tableHtml: individualCommentary.html,
               specificCommentText: specificCommentText,
               pontoAtencaoText: pontoAtencaoText,
-              dimensionHeaderHtml: dimensionHeaderHtml
+              dimensionHeaderHtml: dimensionHeaderHtml,
+              // NOVO: Armazena o Plano de Ação
+              actionPlanText: actionPlanText
             })
           })
 
@@ -1225,12 +1309,13 @@
                     boxWidth: 12,
                     font: {
                       size: 14
-                    } /* NOVO AJUSTE: Aumentado de 12 para 14 */
+                    } /* NOVO AJUSTE: Aumentado de 12 para 14 */,
+                    color: '#000' // AJUSTE: Cor do texto da legenda para preto puro
                   }
                 },
                 // CORREÇÃO: datalabels para exibir o percentual
                 datalabels: {
-                  color: '#fff', // Cor da fonte
+                  color: '#fff', // Cor da fonte (branco)
                   font: {
                     weight: 'bold',
                     size: 14
@@ -1276,14 +1361,17 @@
                   max: 100,
                   ticks: {
                     callback: (v) => v + '%',
-                    font: { size: 14 }
-                  } /* NOVO AJUSTE: Aumentado de 12 para 14 */
+                    font: { size: 14 },
+                    color: '#000' // AJUSTE: Cor do texto dos ticks para preto puro
+                  } /* NOVO AJUSTE: Aumentado de 12 para 14 */,
+                  grid: { display: true }
                 },
                 y: {
                   stacked: true,
                   grid: { display: false },
                   ticks: {
-                    font: { size: 14 }
+                    font: { size: 14 },
+                    color: '#000' // AJUSTE: Cor do texto dos ticks para preto puro
                   } /* NOVO AJUSTE: Aumentado de 12 para 14 */
                 }
               },
@@ -1307,7 +1395,7 @@
                     if (color === '#1e40af' || color === '#3b82f6') {
                       return '#fff' // Retorna branco para fundo escuro
                     }
-                    return '#333'
+                    return '#000' // AJUSTE: Era #333 (cinza escuro), agora é #000 (preto puro)
                   },
                   font: {
                     size: 13,
@@ -1421,7 +1509,8 @@
         doc.setFontSize(8)
         doc.setTextColor(50, 50, 50)
 
-        let textY = PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM + 12
+        // AJUSTE: Movido de +12 para +8 para subir o texto do rodapé
+        let textY = PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM + 11
 
         for (let i = signatureLines.length - 1; i >= 0; i--) {
           const line = signatureLines[i]
@@ -1454,24 +1543,30 @@
         const FOOTER_HEIGHT_MM = 15
 
         // Total de páginas: Capa (1) + Explicação (1) + Gráficos (n) + Dashboard Final (1)
-        const TOTAL_PAGES = chartObjects.length + 3
+        // O número de páginas de gráficos é determinado dinamicamente, mas a contagem de páginas totais é estática
+        const TOTAL_PAGES = chartObjects.length + 2 // Capa + Explicação + Dashboard = 3 páginas fixas + N páginas de gráficos
 
         const doc = new jsPDF('p', 'mm', 'a4')
 
-        let PAGE_WIDTH_PORTRAIT = doc.internal.pageSize.getWidth()
-        let PAGE_HEIGHT_PORTRAIT = doc.internal.pageSize.getHeight()
+        // Tamanhos da página A4 em Milímetros (padrão)
+        const PAGE_WIDTH_PORTRAIT = doc.internal.pageSize.getWidth() // 210
+        const PAGE_HEIGHT_PORTRAIT = doc.internal.pageSize.getHeight() // 297
+
         const PORTRAIT_CONTENT_WIDTH =
-          PAGE_WIDTH_PORTRAIT - COVER_PAGE_MARGIN_MM * 2
+          PAGE_WIDTH_PORTRAIT - COVER_PAGE_MARGIN_MM * 2 // 180mm
 
-        // Dimensões A4 Paisagem (297x210)
+        // Hardcoded Landscape A4 dimensions (297x210)
         const PAGE_WIDTH_LANDSCAPE = 297
-        const PAGE_HEIGHT_LANDSCAPE = 210
+        const PAGE_HEIGHT_LANDSCAPE = 208
 
-        // Largura do gráfico/conteúdo principal em paisagem
-        const LANDSCAPE_GRAPH_WIDTH_MM = 250
-        const LANDSCAPE_CONTENT_START_Y_MM = HEADER_HEIGHT_MM + 5
-        const LANDSCAPE_MAX_CONTENT_HEIGHT_MM =
-          PAGE_HEIGHT_LANDSCAPE - HEADER_HEIGHT_MM - FOOTER_HEIGHT_MM - 12
+        // Larguras e Limites para o formato LANDSCAPE (Gráficos)
+        const CONTENT_WIDTH_LANDSCAPE =
+          PAGE_WIDTH_LANDSCAPE - PAGE_MARGIN_MM * 2 // 277mm
+        const PAGE_BREAK_LIMIT_LANDSCAPE =
+          PAGE_HEIGHT_LANDSCAPE - FOOTER_HEIGHT_MM // Altura A4 Paisagem
+        const CONTAINER_WIDTH_PX_LANDSCAPE = 880 // Largura do container para captura (em pixels)
+        // **NOVO AJUSTE DE TAMANHO**: Reduzido de 230mm para 215mm para garantir que o bloco caiba no rodapé
+        const CHART_IMG_WIDTH_MM = 215
 
         // -----------------------------------------------------------
         // PÁGINA DE ROSTO (CAPA) - PÁGINA 1 (PORTRAIT)
@@ -1516,7 +1611,7 @@
 
         const subtitleLines = doc.splitTextToSize(
           'INVENTÁRIO DE RISCOS/PERIGOS PSICOSSOCIAIS RELACIONADOS AO TRABALHO - NR 01',
-          PORTRAIT_CONTENT_WIDTH
+          PORTRAIT_CONTENT_WIDTH // VARIÁVEL AGORA DEFINIDA CORRETAMENTE
         )
         doc.text(subtitleLines, PAGE_WIDTH_PORTRAIT / 2, cursorY, {
           align: 'center'
@@ -1535,86 +1630,290 @@
         addReferenceBox(doc, COVER_PAGE_MARGIN_MM, PAGE_HEIGHT_PORTRAIT)
 
         // -----------------------------------------------------------
-        // PÁGINA DE TEXTO EXPLICATIVO - PÁGINA 2 (PORTRAIT)
+        // PÁGINA EXPLICATIVA - PÁGINA 2 (PORTRAIT)
         // -----------------------------------------------------------
-        doc.addPage()
+        doc.addPage('a4', 'p')
         addHeaderFooter(doc, 2, TOTAL_PAGES)
 
-        const explanatoryText = {
-          title: 'Aplicação da Job Stress Scale (JSS)',
+        const explanatoryText_Word = {
+          title: 'MODELO DE "JOB STRESS SCALE"',
           paragraphs: [
-            'A aplicação da Job Stress Scale (JSS) permitiu uma avaliação sistemática dos principais fatores associados ao estresse ocupacional, considerando as dimensões demanda psicológica, controle sobre o trabalho e apoio social. Os resultados obtidos forneceram uma compreensão abrangente da relação entre as características do trabalho e a experiência subjetiva dos participantes, possibilitando identificar níveis diferenciados de risco para o estresse laboral.',
-            'A metodologia utilizada mostrou-se eficaz para captar nuances importantes do contexto organizacional, permitindo analisar não apenas a intensidade das exigências do trabalho, mas também o grau de autonomia percebido pelos trabalhadores e a qualidade das interações sociais no ambiente profissional. Dessa forma, a JSS contribuiu para mapear possíveis fatores de vulnerabilidade e, simultaneamente, reconhecer aspectos protetivos presentes na rotina laboral.',
-            'Em síntese, a utilização da Job Stress Scale demonstrou-se uma ferramenta válida e relevante para favorecer o diagnóstico situacional e orientar futuras intervenções voltadas à promoção da saúde ocupacional. Os resultados obtidos servirão como base para discussões mais amplas sobre condições de trabalho e para o desenvolvimento de estratégias que visem à melhoria do bem-estar e da qualidade de vida dos profissionais avaliados.'
-          ]
+            'A avaliação dos aspectos relacionados à dimensão psicossocial do trabalho e saúde mental vem ganhando relevante atenção nos estudos em Saúde e trabalho. A Norma Regulamentadora 01 (NR-01) – Disposições Gerais e Gerenciamento de Riscos Ocupacionais determina que o gerenciamento de riscos ocupacionais deve abranger riscos relacionados aos fatores ergonômicos, incluindo os fatores de risco psicossociais relacionados ao trabalho.',
+            'Diante da ausência formal de indicação do Ministério do Trabalho de ferramentas ou instrumentos técnico-científicos para inventariar os Riscos/Perigos Psicossociais na NR01, fica a critério das empresas a escolha do mecanismo que materialize o diagnostico e ações que devem compor tal inventario, bem como o Plano de Ação requerido no PGR.',
+            'Desta forma, a Produtiva Saúde e Segurança Ocupacional, após a avaliação de diversas ferramentas presentes na Literatura Técnica internacional com a devida validação científica, escolheu o “Modelo Job Stress Scale” elaborado por Töres Theorell (1988), pois tornou-se modelo de referência mundial, contendo 17 questões: cinco para avaliar demanda, seis para avaliar controle e seis para apoio social.',
+            'Para as dimensões que avaliam demanda e controle, as opções de resposta são apresentadas em escala tipo likert (1-4), variando entre “frequentemente” e “nuca/quase nunca”. Quanto ao bloco referente ao apoio social, as opções de resposta, também em escala likert, possuem variação entre “concordo totalmente” e “discordo totalmente”.',
+            'As três dimensões refletem componentes essenciais da saúde mental ocupacional e permitem compreender o impacto psicossocial do ambiente de trabalho sobre o bem-estar do indivíduo.'
+          ],
+          dimensions: [
+            {
+              dimensao: 'Demanda Psicológica',
+              descricao:
+                'Grau de exigência do trabalho (ritmo, intensidade, conflitos de tarefa, assédio)',
+              interpretacao: 'Escores altos indicam maior pressão no trabalho.'
+            },
+            {
+              dimensao: 'Controle sobre o Trabalho',
+              descricao:
+                'Autonomia e uso de habilidades cognitivas, incluindo discernimento intelectual e autoridade decisória.',
+              interpretacao:
+                'Escores altos refletem autonomia; baixos indicam vulnerabilidade.'
+            },
+            {
+              dimensao: 'Apoio Social',
+              descricao:
+                'Qualidade das relações interpessoais com colegas e supervisores.',
+              interpretacao:
+                'Escores altos refletem suporte; baixo indicam risco de isolamento.'
+            }
+          ],
+          scores: [
+            { dimensao: 'Demanda', itens: '1 – 5', min: '5', max: '20' },
+            { dimensao: 'Controle', itens: '6 – 11', min: '6', max: '24' },
+            { dimensao: 'Apoio Social', itens: '12 - 17', min: '6', max: '24' }
+          ],
+          perfis: [
+            {
+              perfil: 'Alto Desgaste',
+              caracteristicas:
+                'Alta demanda e baixo controle – maior risco de adoecimento.'
+            },
+            {
+              perfil: 'Trabalho Ativo',
+              caracteristicas:
+                'Alta demanda e alto controle – maior engajamento e crescimento.'
+            },
+            {
+              perfil: 'Trabalho Passivo',
+              caracteristicas:
+                'Baixa demanda e baixo controle - apatia e desmotivação.'
+            },
+            {
+              perfil: 'Baixo Desgaste',
+              caracteristicas:
+                'Baixa demanda e alto controle – equilíbrio e bem-estar.'
+            }
+          ],
+          apoioSocialFinal:
+            'O Apoio Social funciona como atenuador/moderador no resultado da interação entre demanda e controle, objetivando o quão maior possa ser esta dimensão, contrabalanceando com as demais dimensões. Quando altas demandas e alto controle coexistem, ainda que as demandas sejam excessivas, elas são menos danosas, na medida em que o trabalhador pode escolher como planejar suas horas de trabalho de acordo com suas necessidades.'
         }
 
         let currentYExplanatory = HEADER_HEIGHT_MM + 5 + 5
+        const PORTRAIT_CONTENT_WIDTH_TEXT_AUTO =
+          PAGE_WIDTH_PORTRAIT - PAGE_MARGIN_MM * 2 // 190mm
 
+        // Título
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(16)
         doc.setTextColor(37, 99, 235)
-        doc.text(explanatoryText.title, PAGE_MARGIN_MM, currentYExplanatory)
-        currentYExplanatory += 15
+        doc.text(
+          explanatoryText_Word.title,
+          PAGE_WIDTH_PORTRAIT / 2,
+          currentYExplanatory,
+          {
+            align: 'center'
+          }
+        )
+        // AJUSTE 1: Redução do espaçamento após o título principal (15 -> 10)
+        currentYExplanatory += 10
 
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(12)
+        doc.setFontSize(10)
         doc.setTextColor(0, 0, 0)
 
-        explanatoryText.paragraphs.forEach((paragraph) => {
-          const lines = doc.splitTextToSize(paragraph, PORTRAIT_CONTENT_WIDTH)
-          doc.text(lines, PAGE_WIDTH_PORTRAIT / 2, currentYExplanatory, {
-            align: 'center'
+        // Parágrafos de Introdução
+        explanatoryText_Word.paragraphs.forEach((paragraph) => {
+          const lines = doc.splitTextToSize(
+            paragraph,
+            PORTRAIT_CONTENT_WIDTH_TEXT_AUTO - 20
+          )
+          doc.text(lines, PAGE_MARGIN_MM + 10, currentYExplanatory, {
+            align: 'justify',
+            maxWidth: PORTRAIT_CONTENT_WIDTH_TEXT_AUTO - 20
           })
-          currentYExplanatory += lines.length * 7 + 8
+          // AJUSTE 2: Redução da linha e margem dos parágrafos (4.5 + 5 -> 4 + 4)
+          currentYExplanatory += lines.length * 4 + 4
+        })
+
+        // Título Tabela 1: Dimensões
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.setTextColor(30, 30, 30)
+        doc.text(
+          'Tabela 1: Dimensões, Descrição e Interpretação',
+          PAGE_WIDTH_PORTRAIT / 2,
+          currentYExplanatory,
+          { align: 'center' }
+        )
+        currentYExplanatory += 5
+
+        // Tabela 1 - Dimensões
+        doc.autoTable({
+          startY: currentYExplanatory,
+          head: [['Dimensão', 'Descrição', 'Interpretacao']],
+          body: explanatoryText_Word.dimensions.map((d) => [
+            d.dimensao,
+            d.descricao,
+            d.interpretacao
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' },
+          headStyles: {
+            fillColor: [230, 230, 230],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold'
+          },
+          columnStyles: {
+            0: { cellWidth: 35 },
+            1: { cellWidth: 75 },
+            2: { cellWidth: 80 }
+          },
+          margin: { left: PAGE_MARGIN_MM }
+        })
+        // AJUSTE 3: Redução da margem após a Tabela 1 (8 -> 6)
+        currentYExplanatory = doc.lastAutoTable.finalY + 6
+
+        // Título Tabela 2: Escores
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text(
+          'Tabela 2: Escores Mínimo e Máximo por Dimensão',
+          PAGE_WIDTH_PORTRAIT / 2,
+          currentYExplanatory,
+          { align: 'center' }
+        )
+        currentYExplanatory += 5
+
+        // Tabela 2 - Escores
+        doc.autoTable({
+          startY: currentYExplanatory,
+          head: [['Dimensão', 'Itens', 'Escore Mínimo', 'Escore Máximo']],
+          body: explanatoryText_Word.scores.map((s) => [
+            s.dimensao,
+            s.itens,
+            s.min,
+            s.max
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 1, halign: 'center' },
+          headStyles: {
+            fillColor: [230, 230, 230],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold'
+          },
+          margin: { left: (PAGE_WIDTH_PORTRAIT - 100) / 2 }, // Centralizar
+          columnStyles: {
+            0: { cellWidth: 30 },
+            1: { cellWidth: 20 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: 25 }
+          }
+        })
+        // AJUSTE 4: Redução da margem após a Tabela 2 (8 -> 6)
+        currentYExplanatory = doc.lastAutoTable.finalY + 6
+
+        // Título Tabela 3: Perfis Ocupacionais
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text(
+          'Tabela 3: Perfis Ocupacionais Baseados em Demanda e Controle',
+          PAGE_WIDTH_PORTRAIT / 2,
+          currentYExplanatory,
+          { align: 'center' }
+        )
+        currentYExplanatory += 5
+
+        // Tabela 3 - Perfis
+        doc.autoTable({
+          startY: currentYExplanatory,
+          head: [['Perfil Ocupacional', 'Principais Características']],
+          body: explanatoryText_Word.perfis.map((p) => [
+            p.perfil,
+            p.caracteristicas
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' },
+          headStyles: {
+            fillColor: [230, 230, 230],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold'
+          },
+          columnStyles: {
+            0: { cellWidth: 50 },
+            1: { cellWidth: 140 }
+          },
+          margin: { left: PAGE_MARGIN_MM }
+        })
+        // AJUSTE 5: Redução da margem após a Tabela 3 (8 -> 6)
+        currentYExplanatory = doc.lastAutoTable.finalY + 6
+
+        // Texto Final sobre Apoio Social
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.text(
+          'Conclusão sobre Apoio Social:',
+          PAGE_MARGIN_MM,
+          currentYExplanatory
+        )
+        // AJUSTE 6: Redução do espaçamento após o título de conclusão (5 -> 4)
+        currentYExplanatory += 4
+        const linesApoio = doc.splitTextToSize(
+          explanatoryText_Word.apoioSocialFinal,
+          PORTRAIT_CONTENT_WIDTH_TEXT_AUTO - 20
+        )
+        doc.text(linesApoio, PAGE_MARGIN_MM + 10, currentYExplanatory, {
+          align: 'justify',
+          maxWidth: PORTRAIT_CONTENT_WIDTH_TEXT_AUTO - 20
         })
 
         // -----------------------------------------------------------
-        // GRÁFICOS INDIVIDUAIS - PÁGINA 3 em diante (LANDSCAPE)
+        // GRÁFICOS INDIVIDUAIS - PÁGINA 3 em diante (TODAS LANDSCAPE)
         // -----------------------------------------------------------
 
-        // Transição para Paisagem
-        doc.addPage('a4', 'l')
+        // **REMOÇÃO DA LINHA ABAIXO:** doc.addPage('a4', 'l') foi removida.
+        // O loop agora adicionará a primeira página do gráfico (Pág 3) com 'l' apenas se o primeiro gráfico não couber na Pág 2,
+        // mas como começamos o loop adicionando a primeira página, usaremos doc.addPage('a4', 'l') antes de começar a adicionar gráficos.
 
         const pdfContainer = document.getElementById('pdfReportContainer')
         pdfContainer.innerHTML = ''
 
-        const GRAPH_START_X_MM =
-          (PAGE_WIDTH_LANDSCAPE - LANDSCAPE_GRAPH_WIDTH_MM) / 2
+        // Inicializa o container com a largura para PAISAGEM (880px)
+        pdfContainer.style.width = CONTAINER_WIDTH_PX_LANDSCAPE + 'px' // 880px
+
+        let pageIndexCounter = 3 // Começamos na Página 3
+        let currentY = HEADER_HEIGHT_MM + 5
+        addHeaderFooter(doc, pageIndexCounter, TOTAL_PAGES)
 
         for (let i = 0; i < chartObjects.length; i++) {
           const item = chartObjects[i]
-          const currentPageNumber = i + 3
 
-          addHeaderFooter(doc, currentPageNumber, TOTAL_PAGES)
+          // Define o limite e a largura do conteúdo, AGORA SEMPRE PARA LANDSCAPE
+          let currentLimit = PAGE_BREAK_LIMIT_LANDSCAPE
+          // NOVO AJUSTE: Usa a largura reduzida (215mm)
+          let imgWidthInMM = CHART_IMG_WIDTH_MM
 
+          // Monta o item do relatório (HTML)
           const itemWrapper = document.createElement('div')
           itemWrapper.className = 'pdf-report-item'
 
           if (item.dimensionHeaderHtml) {
             itemWrapper.innerHTML += item.dimensionHeaderHtml
           }
-
           itemWrapper.innerHTML += `<h2>${item.title}</h2>`
-
           const chartCanvas = document.getElementById(item.chartId)
-          if (!chartCanvas) {
-            console.error(`Canvas ${item.chartId} não encontrado.`)
-            continue
+
+          if (chartCanvas) {
+            try {
+              const chartImg = chartCanvas.toDataURL('image/png', 1.0)
+              // Width: 630px para caber nos 880px do container de captura em paisagem
+              itemWrapper.innerHTML += `<img src="${chartImg}" style="width: 630px; height: 260px; display: block; margin: 0 auto 10px auto; border: 1px solid #ccc;">`
+            } catch (e) {
+              itemWrapper.innerHTML += `<p style="color: red; text-align: center;">[ERRO ao carregar imagem do gráfico]</p>`
+            }
           }
 
-          try {
-            const chartImg = chartCanvas.toDataURL('image/png', 1.0)
-            // A altura do gráfico individual agora é 550px no DOM
-            itemWrapper.innerHTML += `<img src="${chartImg}" style="width: 850px; height: 530px; display: block; margin: 0 auto 10px auto; border: 1px solid #ccc;">`
-          } catch (e) {
-            itemWrapper.innerHTML += `<p style="color: red; text-align: center;">[ERRO ao carregar imagem do gráfico]</p>`
-          }
-
-          // CORREÇÃO: As tabelas e textos abaixo herdarão o novo font-size: 12px
           itemWrapper.innerHTML += item.tableHtml
 
-          // A variável específica foi corrigida no bloco 'btnGerar'
+          // Comentários Gerais (Título em Azul)
           if (item.specificCommentText) {
             let commentBody = item.specificCommentText
               .split('\n')
@@ -1622,63 +1921,87 @@
               .join('<br>')
             commentBody = commentBody.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
 
-            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px;">${NEW_COMMENTARY_TITLE}</p>`
-            // OBS: O font-size é ajustado pela classe 'commentary' que está em 12px agora.
+            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px; color: #2563eb;">${NEW_COMMENTARY_TITLE}</p>`
             itemWrapper.innerHTML += `<div class="commentary" style="white-space: normal;">${commentBody}</div>`
           }
 
+          // Ponto de Atenção (Título em Laranja)
           if (item.pontoAtencaoText) {
             let formattedAttention = item.pontoAtencaoText.replace(
               /\*\*(.*?)\*\*/g,
               '<b>$1</b>'
             )
-            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px;">Ponto de Atenção:</p>`
-            // OBS: O font-size é ajustado pela classe 'attention-point' que está em 12px agora.
+            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px; color: #f97316;">${ATTENTION_POINT_TITLE}</p>`
             itemWrapper.innerHTML += `<div class="attention-point" style="white-space: normal;">${formattedAttention}</div>`
+          }
+
+          // Plano de Ação (Título em Title Case e Verde)
+          if (item.actionPlanText) {
+            itemWrapper.innerHTML += `<p style="font-weight: bold; margin-top: 20px; font-size: 11px; color: #047857;">${ACTION_PLAN_TITLE}</p>`
+            itemWrapper.innerHTML += `<div class="action-plan-box" style="white-space: normal;">${item.actionPlanText}</div>`
           }
 
           pdfContainer.appendChild(itemWrapper)
 
-          try {
-            const canvas = await html2canvas(itemWrapper, {
-              // NOVO AJUSTE: Aumento da escala para 4 para maior nitidez
-              scale: 4,
-              useCORS: true,
-              logging: false,
-              width: pdfContainer.offsetWidth,
-              height: itemWrapper.offsetHeight
-            })
+          // Captura a altura necessária em MM (aproximadamente, para o check de quebra)
+          await new Promise((resolve) => setTimeout(resolve, 50)) // Pequeno delay
+          const requiredHeight = itemWrapper.offsetHeight / 3.78 // Conversão para mm
 
-            const imgData = canvas.toDataURL('image/jpeg', 0.9)
-            const imgWidth = LANDSCAPE_GRAPH_WIDTH_MM
-            const imgHeightProportional =
-              (canvas.height * imgWidth) / canvas.width
-            let finalImgHeight = Math.min(
-              imgHeightProportional,
-              LANDSCAPE_MAX_CONTENT_HEIGHT_MM
-            )
+          // O ponto CRÍTICO: Checagem de quebra de página
+          if (currentY + requiredHeight > currentLimit) {
+            // Se for quebrar, limpa o container e re-adiciona o item (para que ele seja o primeiro na próxima página)
+            pdfContainer.innerHTML = ''
+            pdfContainer.appendChild(itemWrapper)
 
-            doc.addImage(
-              imgData,
-              'JPEG',
-              GRAPH_START_X_MM,
-              LANDSCAPE_CONTENT_START_Y_MM,
-              imgWidth,
-              finalImgHeight
-            )
-          } catch (e) {
-            console.error(`Erro ao gerar item ${item.title} no PDF:`, e)
-            doc.text(
-              `[ERRO ao gerar item ${item.title}: ${e.message}]`,
-              PAGE_MARGIN_MM,
-              LANDSCAPE_CONTENT_START_Y_MM
-            )
-          }
+            pageIndexCounter++
 
-          pdfContainer.innerHTML = ''
-          if (i < chartObjects.length - 1) {
+            // Adiciona nova página, MANTENDO Landscape
             doc.addPage('a4', 'l')
+
+            // Ajusta a largura do container (já está, mas garante)
+            pdfContainer.style.width = CONTAINER_WIDTH_PX_LANDSCAPE + 'px'
+
+            currentY = HEADER_HEIGHT_MM + 5 // Reseta Y
+            addHeaderFooter(doc, pageIndexCounter, TOTAL_PAGES)
           }
+
+          // Captura o container visível com ESCALA 5
+          const canvas = await html2canvas(itemWrapper, {
+            scale: 5,
+            useCORS: true,
+            logging: false,
+            width: pdfContainer.offsetWidth,
+            height: itemWrapper.offsetHeight
+          })
+
+          const imgData = canvas.toDataURL('image/jpeg', 0.9)
+          const imgWidth = imgWidthInMM // **USANDO A LARGURA REDUZIDA EM MM (215mm)**
+          const imgHeightProportional =
+            (canvas.height * imgWidth) / canvas.width
+          let finalImgHeight = Math.min(
+            imgHeightProportional,
+            currentLimit - currentY // Garante que não ultrapasse a margem do rodapé
+          )
+
+          // Posição X (Centraliza a imagem de 215mm)
+          const X_START = (doc.internal.pageSize.getWidth() - imgWidth) / 2
+
+          doc.addImage(
+            imgData,
+            'JPEG',
+            X_START,
+            currentY,
+            imgWidth,
+            finalImgHeight,
+            null,
+            'FAST'
+          )
+
+          // Atualiza a posição Y para o próximo gráfico
+          currentY += finalImgHeight + 5 // 5mm de margem entre gráficos
+
+          // Limpa o container para o próximo gráfico (se houver)
+          pdfContainer.innerHTML = ''
         }
 
         // -----------------------------------------------------------
@@ -1688,43 +2011,60 @@
         // 1. Garante que os gráficos foram gerados e estão no DOM visível
         await gerarDashboardFinal()
 
+        // CRÍTICO: Garante que o container esteja na largura correta para Paisagem (L)
+        pdfContainer.style.width = CONTAINER_WIDTH_PX_LANDSCAPE + 'px' // 880px
+
         // AJUSTE PARA FAIXA BRANCA: Aumenta o atraso de captura para 1000ms
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        // 2. Captura o container VISÍVEL do Dashboard com ESCALA 6 (MÁXIMA NITIDEZ)
+        // 2. Captura o container VISÍVEL do Dashboard com ESCALA 6
         const dashContainerVisible = document.getElementById(
           'dashboard-final-container'
         )
 
         // Adiciona uma nova página Paisagem
-        doc.addPage('a4', 'l')
-        const currentPageNumber = TOTAL_PAGES
-        addHeaderFooter(doc, currentPageNumber, TOTAL_PAGES)
+        doc.addPage('a4', 'l') // CRÍTICO: LANDSCAPE ('l')
+        const finalPageNumber = TOTAL_PAGES
+        addHeaderFooter(doc, finalPageNumber, TOTAL_PAGES)
 
-        // ESCALA 6 para máxima nitidez e tamanho
         const canvasDash = await html2canvas(dashContainerVisible, {
-          scale: 6,
+          scale: 3,
           useCORS: true,
           logging: false
         })
 
-        const imgDash = canvasDash.toDataURL('image/jpeg', 0.9)
+        const imgDash = canvasDash.toDataURL('image/png', 0.3)
 
         // Ajusta a imagem na página A4 Paisagem (297 x 210 mm)
-        const pdfW = 277 // Usa 277mm (297 - 20mm margem)
+        const pdfW = CONTENT_WIDTH_LANDSCAPE - 20 // 257mm (Mantido mais largo para o dashboard)
         const pdfH_proportional = (canvasDash.height * pdfW) / canvasDash.width
-        const X_START = 10
         const Y_START = HEADER_HEIGHT_MM + 5
 
         const MAX_HEIGHT =
           PAGE_HEIGHT_LANDSCAPE - HEADER_HEIGHT_MM - FOOTER_HEIGHT_MM - 5
 
         let finalPdfH = Math.min(pdfH_proportional, MAX_HEIGHT)
+        let finalX = (PAGE_WIDTH_LANDSCAPE - pdfW) / 2 // Centraliza
 
-        doc.addImage(imgDash, 'JPEG', X_START, Y_START, pdfW, finalPdfH)
+        doc.addImage(
+          imgDash,
+          'JPEG',
+          finalX,
+          Y_START,
+          pdfW,
+          finalPdfH,
+          null,
+          'FAST'
+        )
 
         // Salva
-        doc.save('Relatorio_JSS_Otimizado_v9_Final.pdf')
+        const fileName = `Relatorio_JSS_Misto_${companyName}_vFinal.pdf`
+        doc.save(fileName)
+
+        // Ocultar container e reativar botão
+        pdfContainer.style.left = '-9999px'
+        pdfContainer.style.top = '-9999px'
+
         btn.innerText = oldTxt
         btn.disabled = false
       })
